@@ -1,0 +1,20 @@
+[
+  {
+    "path": "/api/v2/workspaces/{workspaceId}",
+    "method": "get",
+    "working": false,
+    "notes": "- note workd"
+  },
+  {
+    "path": "/api/v2/auths/login",
+    "method": "post",
+    "working": false,
+    "notes": ""
+  },
+  {
+    "path": "/api/v2/workspaces",
+    "method": "get",
+    "working": false,
+    "notes": "- hello world"
+  }
+]

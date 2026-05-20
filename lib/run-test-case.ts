@@ -1,37 +1,55 @@
 export interface RunTestCaseResult {
   status: number | string;
   ok: boolean;
-  response: any;
+  response: unknown;
 }
 
 export async function runTestCase(
-  testCase: any,
+  testCase: { body: Record<string, unknown>; expectedStatus?: number },
   apiUrl: string,
+  method = "POST",
   token?: string
 ): Promise<RunTestCaseResult> {
   try {
     const headers: Record<string, string> = {
       "Content-Type": "application/json",
     };
-    if (token) {
-      headers["Authorization"] = `Bearer ${token}`;
+    if (token?.trim()) {
+      headers.Authorization = `Bearer ${token.trim()}`;
     }
-    const response = await fetch(apiUrl, {
-      method: "POST",
-      headers,
-      body: JSON.stringify(testCase.body),
-    });
-    const data = await response.json().catch(() => ({}));
-    return {
-      status: response.status,
-      ok: response.ok,
-      response: data,
-    };
+
+    const upperMethod = method.toUpperCase();
+    const init: RequestInit = { method: upperMethod, headers };
+
+    if (
+      upperMethod !== "GET" &&
+      upperMethod !== "HEAD" &&
+      testCase.body != null
+    ) {
+      init.body = JSON.stringify(testCase.body);
+    }
+
+    const response = await fetch(apiUrl, init);
+    const text = await response.text();
+    let data: unknown = text;
+    try {
+      data = text ? JSON.parse(text) : {};
+    } catch {
+      // keep raw text
+    }
+
+    const status = response.status;
+    const ok =
+      testCase.expectedStatus != null
+        ? status === testCase.expectedStatus
+        : response.ok;
+
+    return { status, ok, response: data };
   } catch (error) {
     return {
       status: "error",
       ok: false,
-      response: String(error),
+      response: error instanceof Error ? error.message : String(error),
     };
   }
 }

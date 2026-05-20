@@ -1,7 +1,7 @@
 "use client";
 import { Prism as SyntaxHighlighter } from "react-syntax-highlighter";
 import { oneLight } from "react-syntax-highlighter/dist/esm/styles/prism";
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect } from "react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   Card,
@@ -49,16 +49,7 @@ export function ResponseViewer({
   const [highlightedBody, setHighlightedBody] = useState<string>("");
   const [responseSize, setResponseSize] = useState<number>(0);
 
-  const formattedBody = useMemo(() => {
-    if (!responseBody) return "";
-    try {
-      return typeof responseBody === "string"
-        ? responseBody
-        : JSON.stringify(responseBody, null, 2);
-    } catch (e) {
-      return responseBody.toString();
-    }
-  }, [responseBody]);
+  const formattedBody = responseBody || "";
 
   useEffect(() => {
     try {

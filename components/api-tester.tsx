@@ -1,5 +1,5 @@
 "use client";
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { useForm } from "react-hook-form";
 import { ApiTesterProps, TestCase, TestResult } from "@/app/types/types";
 import { FetchTester } from "@/lib/fetch-document/fetch-tester";
@@ -42,6 +42,7 @@ export function ApiTester({
   const [bulkImportText, setBulkImportText] = useState<string>("");
   const [bulkImportError, setBulkImportError] = useState<string>("");
   const [bulkImportOpen, setBulkImportOpen] = useState<boolean>(false);
+  const testResultIdSeq = useRef(0);
 
   const [baseUrl, setBaseUrl] = useState(
     apiData.servers && apiData.servers[0]?.url
@@ -129,11 +130,11 @@ export function ApiTester({
       console.log("Here here", url, requestOptions);
       const response = await FetchTester(url, requestOptions);
       console.log("Response received:", response);
-      if (response.data !== null) {
+      if (response.data != null) {
         const formattedData =
           typeof response.data === "object"
             ? JSON.stringify(response.data, null, 2)
-            : response.data.toString();
+            : String(response.data);
 
         setResponseBody(formattedData);
       }
@@ -143,7 +144,7 @@ export function ApiTester({
       setResponseHeaders(response.headers);
 
       const testResult: TestResult = {
-        id: Date.now().toString(),
+        id: `tr-${++testResultIdSeq.current}`,
         timestamp: new Date(),
         request: {
           url,
@@ -177,7 +178,7 @@ export function ApiTester({
       console.error("Request failed:", error);
 
       const testResult: TestResult = {
-        id: Date.now().toString(),
+        id: `tr-${++testResultIdSeq.current}`,
         timestamp: new Date(),
         request: {
           url,

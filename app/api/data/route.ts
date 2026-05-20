@@ -1,41 +1,18 @@
 import { type NextRequest, NextResponse } from "next/server";
-import fs from "fs";
-import path from "path";
-import { mkdir } from "fs/promises";
-
-const DATA_DIR = path.join(process.cwd(), "data");
-const SPECS_DIR = path.join(DATA_DIR, "specs");
-const STATUS_DIR = path.join(DATA_DIR, "status");
-const SETTINGS_DIR = path.join(DATA_DIR, "settings");
-
-async function ensureDirectories() {
-  try {
-    if (!fs.existsSync(DATA_DIR)) {
-      await mkdir(DATA_DIR, { recursive: true });
-    }
-
-    if (!fs.existsSync(SPECS_DIR)) {
-      await mkdir(SPECS_DIR);
-    }
-
-    if (!fs.existsSync(STATUS_DIR)) {
-      await mkdir(STATUS_DIR);
-    }
-
-    if (!fs.existsSync(SETTINGS_DIR)) {
-      await mkdir(SETTINGS_DIR);
-    }
-
-    return true;
-  } catch (error) {
-    console.error("Error creating directories:", error);
-    return false;
-  }
-}
+import {
+  validateSpecId,
+  saveSpecVersion,
+  deleteSpecFully,
+  getSpec,
+  getEndpointStatuses,
+  saveEndpointStatuses,
+  deleteEndpointStatuses,
+  getSpecSettings,
+  saveSpecSettings,
+  deleteSpecSettings,
+} from "@/lib/spec-versioning";
 
 export async function GET(request: NextRequest) {
-  await ensureDirectories(); // Ensure directories exist before reading
-
   const searchParams = request.nextUrl.searchParams;
   const type = searchParams.get("type");
   const id = searchParams.get("id") || "default";
@@ -47,39 +24,36 @@ export async function GET(request: NextRequest) {
     );
   }
 
-  try {
-    let filePath: string;
+  if (type === "spec" && !validateSpecId(id)) {
+    return NextResponse.json({ error: "Invalid id" }, { status: 400 });
+  }
 
+  try {
     switch (type) {
-      case "spec":
-        filePath = path.join(SPECS_DIR, `${id}.json`);
-        break;
-      case "status":
-        filePath = path.join(STATUS_DIR, `${id}.json`);
-        break;
-      case "settings":
-        filePath = path.join(SETTINGS_DIR, `${id}.json`);
-        break;
+      case "spec": {
+        const data = getSpec(id);
+        if (!data) {
+          return NextResponse.json(
+            { error: "Specification not found" },
+            { status: 404 }
+          );
+        }
+        return NextResponse.json(data);
+      }
+      case "status": {
+        const data = getEndpointStatuses(id);
+        return NextResponse.json(data ?? {});
+      }
+      case "settings": {
+        const data = getSpecSettings(id);
+        return NextResponse.json(data ?? {});
+      }
       default:
         return NextResponse.json(
           { error: "Invalid type parameter" },
           { status: 400 }
         );
     }
-
-    if (!fs.existsSync(filePath)) {
-      if (type === "spec") {
-        return NextResponse.json(
-          { error: "Specification not found" },
-          { status: 404 }
-        );
-      }
-
-      return NextResponse.json({});
-    }
-
-    const data = fs.readFileSync(filePath, "utf-8");
-    return NextResponse.json(JSON.parse(data));
   } catch (error) {
     console.error(`Error reading ${type} data:`, error);
     return NextResponse.json(
@@ -90,11 +64,9 @@ export async function GET(request: NextRequest) {
 }
 
 export async function POST(request: NextRequest) {
-  await ensureDirectories(); // Ensure directories exist before writing
-
   try {
     const body = await request.json();
-    const { type, id = "default", data } = body;
+    const { type, id = "default", data, meta } = body;
 
     if (!type || !data) {
       return NextResponse.json(
@@ -103,34 +75,28 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    let filePath: string;
-
     switch (type) {
-      case "spec":
-        const uniqueId = `${id}_${Date.now()}`;
-        const latestPath = path.join(SPECS_DIR, `${id}.json`);
-        const versionedPath = path.join(SPECS_DIR, `${uniqueId}.json`);
-        fs.writeFileSync(versionedPath, JSON.stringify(data, null, 2));
-        fs.writeFileSync(latestPath, JSON.stringify(data, null, 2));
-        // Assign filePath to latestPath so it's defined for the next line
-        filePath = latestPath;
-        break;
-      case "status":
-        filePath = path.join(STATUS_DIR, `${id}.json`);
-        break;
-      case "settings":
-        filePath = path.join(SETTINGS_DIR, `${id}.json`);
-        break;
+      case "spec": {
+        if (!validateSpecId(id)) {
+          return NextResponse.json({ error: "Invalid id" }, { status: 400 });
+        }
+        const ts = saveSpecVersion(id, data, meta);
+        return NextResponse.json({ success: true, ts });
+      }
+      case "status": {
+        saveEndpointStatuses(id, data);
+        return NextResponse.json({ success: true });
+      }
+      case "settings": {
+        saveSpecSettings(id, data);
+        return NextResponse.json({ success: true });
+      }
       default:
         return NextResponse.json(
           { error: "Invalid type parameter" },
           { status: 400 }
         );
     }
-
-    fs.writeFileSync(filePath, JSON.stringify(data, null, 2));
-
-    return NextResponse.json({ success: true });
   } catch (error) {
     console.error("Error saving data:", error);
     return NextResponse.json({ error: "Failed to save data" }, { status: 500 });
@@ -138,8 +104,6 @@ export async function POST(request: NextRequest) {
 }
 
 export async function DELETE(request: NextRequest) {
-  await ensureDirectories(); // Ensure directories exist before deleting
-
   const searchParams = request.nextUrl.searchParams;
   const type = searchParams.get("type");
   const id = searchParams.get("id") || "default";
@@ -152,30 +116,28 @@ export async function DELETE(request: NextRequest) {
   }
 
   try {
-    let filePath: string;
-
     switch (type) {
-      case "spec":
-        filePath = path.join(SPECS_DIR, `${id}.json`);
-        break;
-      case "status":
-        filePath = path.join(STATUS_DIR, `${id}.json`);
-        break;
-      case "settings":
-        filePath = path.join(SETTINGS_DIR, `${id}.json`);
-        break;
+      case "spec": {
+        if (!validateSpecId(id)) {
+          return NextResponse.json({ error: "Invalid id" }, { status: 400 });
+        }
+        deleteSpecFully(id);
+        return NextResponse.json({ success: true });
+      }
+      case "status": {
+        deleteEndpointStatuses(id);
+        return NextResponse.json({ success: true });
+      }
+      case "settings": {
+        deleteSpecSettings(id);
+        return NextResponse.json({ success: true });
+      }
       default:
         return NextResponse.json(
           { error: "Invalid type parameter" },
           { status: 400 }
         );
     }
-
-    if (fs.existsSync(filePath)) {
-      fs.unlinkSync(filePath);
-    }
-
-    return NextResponse.json({ success: true });
   } catch (error) {
     console.error(`Error deleting ${type} data:`, error);
     return NextResponse.json(

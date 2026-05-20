@@ -10,27 +10,14 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
+import { Input } from "@/components/ui/input";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import {
-  ChevronDown,
-  ChevronRight,
-  Info,
-  Check,
-  X,
-  BarChart,
-  Shield,
-  PlaneTakeoff,
-  Download,
-} from "lucide-react";
+import { ChevronDown, ChevronRight, Search, X } from "lucide-react";
 import { EndpointDetailModal } from "@/components/endpoint-detail-modal";
+import { VersionHistorySheet } from "@/components/version-history-sheet";
+import { DocumentationSpecHeader } from "@/components/documentation-spec-header";
+import { ExportEndpointsDialog } from "@/components/export-endpoints-dialog";
+import { EndpointsDataTable } from "@/components/endpoints/endpoints-data-table";
 import {
   Collapsible,
   CollapsibleContent,
@@ -39,6 +26,7 @@ import {
 import { Header } from "@/components/header";
 import { Skeleton } from "@/components/ui/skeleton";
 import { fetchData, saveData } from "@/lib/data-service";
+import { getControllerBadgeStyle } from "@/lib/controller-colors";
 import { toast } from "sonner";
 
 import Link from "next/link";
@@ -58,15 +46,6 @@ type EndpointData = {
   operationId: string;
   working: boolean;
   notes: string;
-};
-
-const controllerColors: Record<string, string> = {
-  "resume-controller": "bg-purple-100 text-purple-800 border-purple-200",
-  "topic-controller": "bg-emerald-100 text-emerald-800 border-emerald-200",
-  "user-controller": "bg-amber-100 text-amber-800 border-amber-200",
-  "auth-controller": "bg-sky-100 text-sky-800 border-sky-200",
-  "file-controller": "bg-rose-100 text-rose-800 border-rose-200",
-  default: "bg-gray-100 text-gray-800 border-gray-200",
 };
 
 export default function Documentation() {
@@ -90,6 +69,8 @@ export default function Documentation() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [controllerSearch, setControllerSearch] = useState("");
+  const [historyOpen, setHistoryOpen] = useState(false);
+  const [exportOpen, setExportOpen] = useState(false);
 
   useEffect(() => {
     async function loadData() {
@@ -352,27 +333,6 @@ export default function Documentation() {
     }
   };
 
-  const getMethodColor = (method: string) => {
-    switch (method.toUpperCase()) {
-      case "GET":
-        return "bg-blue-100 text-blue-800";
-      case "POST":
-        return "bg-green-100 text-green-800";
-      case "PUT":
-        return "bg-yellow-100 text-yellow-800";
-      case "DELETE":
-        return "bg-red-100 text-red-800";
-      case "PATCH":
-        return "bg-orange-100 text-orange-800";
-      default:
-        return "bg-gray-100 text-gray-800";
-    }
-  };
-
-  const getControllerColor = (controller: string) => {
-    return controllerColors[controller] || controllerColors.default;
-  };
-
   // Filter endpoints based on active tab
   const filteredEndpoints = () => {
     if (activeTab === "all") return endpoints;
@@ -418,55 +378,25 @@ export default function Documentation() {
 
   const totalEndpoints = endpoints.length;
   const workingEndpoints = endpoints.filter((e) => e.working).length;
-  const implementationRate =
-    totalEndpoints > 0
-      ? Math.round((workingEndpoints / totalEndpoints) * 100)
-      : 0;
-
-  const handleDownloadCSV = () => {
-    // Prepare CSV header in the desired order
-    const header = ["Method", "Path", "Controller", "Note"];
-    // Prepare rows in the same order
-    const rows = endpoints.map((ep) => [
-      `"${ep.method}"`,
-      `"${ep.path}"`,
-      `"${ep.controller}"`,
-      ep.notes ? `"${ep.notes.replace(/"/g, '""')}"` : "",
-    ]);
-    // Combine header and rows
-    const csvContent = [header, ...rows]
-      .map((row) => row.join(","))
-      .join("\r\n");
-
-    // Create a blob and trigger download
-    const blob = new Blob([csvContent], { type: "text/csv" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `${apiData?.info?.title || "api-endpoints"}.csv`;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
-  };
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-gray-50">
-        <Header title="Loading API Documentation" showBackButton={true} />
-        <main className="container mx-auto py-8 px-4">
-          <Card className="mb-6">
-            <CardHeader>
-              <Skeleton className="h-8 w-64 mb-2" />
-              <Skeleton className="h-4 w-48" />
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-2">
-                <Skeleton className="h-6 w-full" />
-                <Skeleton className="h-6 w-3/4" />
-              </div>
-            </CardContent>
-          </Card>
+      <div className="min-h-screen bg-background">
+        <Header
+          title="Loading…"
+          eyebrow="API documentation"
+          showBackButton={true}
+        />
+        <main className="container mx-auto py-8 px-4 max-w-screen-2xl">
+          <div className="mb-8 rounded-xl border bg-card p-8 space-y-4">
+            <Skeleton className="h-4 w-32" />
+            <Skeleton className="h-10 w-2/3 max-w-md" />
+            <Skeleton className="h-4 w-full max-w-2xl" />
+            <div className="grid grid-cols-2 gap-3 pt-4 max-w-md">
+              <Skeleton className="h-20" />
+              <Skeleton className="h-20" />
+            </div>
+          </div>
 
           <Skeleton className="h-10 w-full mb-6" />
 
@@ -491,8 +421,8 @@ export default function Documentation() {
 
   if (error) {
     return (
-      <div className="min-h-screen bg-gray-50">
-        <Header title="API Documentation Error" showBackButton={true} />
+      <div className="min-h-screen bg-background">
+        <Header title="Error" eyebrow="API documentation" showBackButton={true} />
         <main className="container mx-auto py-8 px-4">
           <Card>
             <CardHeader>
@@ -513,74 +443,46 @@ export default function Documentation() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      <Header
-        title={apiData?.info?.title || "API Documentation"}
-        showBackButton={true}
+    <div className="min-h-screen bg-background">
+      <VersionHistorySheet
+        specId={id}
+        open={historyOpen}
+        onOpenChange={setHistoryOpen}
+        onRestored={() => {
+          fetchData("spec", id).then(setApiData);
+        }}
       />
-      <main className="container mx-auto py-8 px-4">
-        <Card className="mb-6">
-          <CardHeader>
-            <div className="flex items-center justify-between">
-              <div>
-                <CardTitle className="text-lg">
-                  {apiData?.info?.title || "API Documentation"}
-                </CardTitle>
-                <CardDescription className="text-sm text-slate-500">
-                  Version: {apiData?.info?.version || "N/A"}
-                </CardDescription>
-              </div>
-              <div className="flex items-center space-x-2">
-                <Badge className="bg-blue-100 text-blue-800 border-blue-200 px-3 py-1">
-                  {totalEndpoints} Endpoints
-                </Badge>
-                <Badge className="bg-green-100 text-green-800 border-green-200 px-3 py-1">
-                  {workingEndpoints} Working
-                </Badge>
-                <Badge className="bg-yellow-100 text-yellow-800 border-yellow-200 px-3 py-1">
-                  {implementationRate}% Implementation Rate
-                </Badge>
-                <Badge className="bg-blue-100 text-blue-800 border-blue-200 px-3 py-1">
-                  <BarChart className="inline h-4 w-4 mr-1" />
-                  Penh Seyha
-                </Badge>
-                <Badge className="bg-green-100 text-green-800 border-green-200 px-3 py-1">
-                  <Shield className="inline h-4 w-4 mr-1" />
-                  {apiData?.components?.securitySchemes?.bearerAuth?.scheme}
-                </Badge>
-                <Badge className="bg-yellow-100 text-yellow-800 border-yellow-200 px-3 py-1">
-                  <PlaneTakeoff className="inline h-4 w-4 mr-1" />
-                  {apiData?.components?.securitySchemes?.bearerAuth?.type}
-                </Badge>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="flex items-center gap-1"
-                  onClick={handleDownloadCSV}
-                >
-                  <Download className="h-4 w-4" />
-                  Download CSV
-                </Button>
-              </div>
-            </div>
+      <Header
+        title="API documentation"
+        description={apiData?.info?.title}
+        eyebrow="Poseidon"
+        showBackButton={true}
+        specId={id}
+        onHistoryClick={() => setHistoryOpen(true)}
+      />
+      <main className="container mx-auto py-8 px-4 max-w-screen-2xl">
+        <DocumentationSpecHeader
+          specId={id}
+          title={apiData?.info?.title || "API Documentation"}
+          version={apiData?.info?.version}
+          description={apiData?.info?.description}
+          servers={apiData?.servers}
+          authScheme={
+            apiData?.components?.securitySchemes?.bearerAuth?.scheme as
+              | string
+              | undefined
+          }
+          totalEndpoints={totalEndpoints}
+          workingEndpoints={workingEndpoints}
+          onDownloadCsv={() => setExportOpen(true)}
+        />
 
-            <CardDescription className="text-sm text-slate-700 ">
-              {apiData?.info?.description || "No description available"}
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="mb-4">
-              <h3 className="text-lg font-medium mb-2">Servers:</h3>
-              <ul className="space-y-1">
-                {apiData?.servers?.map((server: any, index: number) => (
-                  <li key={index} className="text-sm">
-                    {server.url} - {server.description}
-                  </li>
-                ))}
-              </ul>
-            </div>
-          </CardContent>
-        </Card>
+        <ExportEndpointsDialog
+          open={exportOpen}
+          onOpenChange={setExportOpen}
+          endpoints={endpoints}
+          defaultFileName={apiData?.info?.title || "api-endpoints"}
+        />
 
         <Tabs
           defaultValue="all"
@@ -603,32 +505,29 @@ export default function Documentation() {
           </TabsList>
 
           <TabsContent value="all" className="mt-6 w-full">
-            <EndpointsTable
-              endpoints={filteredEndpoints()}
-              getMethodColor={getMethodColor}
-              getControllerColor={getControllerColor}
-              toggleEndpointStatus={toggleEndpointStatus}
-              openEndpointModal={openEndpointModal}
+            <EndpointsDataTable
+              data={filteredEndpoints()}
+              getControllerBadgeStyle={getControllerBadgeStyle}
+              onToggleStatus={toggleEndpointStatus}
+              onOpenModal={openEndpointModal}
             />
           </TabsContent>
 
           <TabsContent value="working" className="mt-6">
-            <EndpointsTable
-              endpoints={filteredEndpoints()}
-              getMethodColor={getMethodColor}
-              getControllerColor={getControllerColor}
-              toggleEndpointStatus={toggleEndpointStatus}
-              openEndpointModal={openEndpointModal}
+            <EndpointsDataTable
+              data={filteredEndpoints()}
+              getControllerBadgeStyle={getControllerBadgeStyle}
+              onToggleStatus={toggleEndpointStatus}
+              onOpenModal={openEndpointModal}
             />
           </TabsContent>
 
           <TabsContent value="not-working" className="mt-6">
-            <EndpointsTable
-              endpoints={filteredEndpoints()}
-              getMethodColor={getMethodColor}
-              getControllerColor={getControllerColor}
-              toggleEndpointStatus={toggleEndpointStatus}
-              openEndpointModal={openEndpointModal}
+            <EndpointsDataTable
+              data={filteredEndpoints()}
+              getControllerBadgeStyle={getControllerBadgeStyle}
+              onToggleStatus={toggleEndpointStatus}
+              onOpenModal={openEndpointModal}
             />
           </TabsContent>
 
@@ -636,29 +535,31 @@ export default function Documentation() {
             <div className="space-y-6">
               {/* Add search input */}
               <div className="relative">
-                <input
-                  type="text"
-                  placeholder="Search controllers..."
+                <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                <Input
+                  placeholder="Search controllers…"
                   value={controllerSearch}
                   onChange={(e) => setControllerSearch(e.target.value)}
-                  className="w-full px-4 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="pl-9 pr-9"
                 />
-                <div className="absolute right-3 top-2.5 text-gray-400">
-                  {controllerSearch && (
-                    <button
-                      onClick={() => setControllerSearch("")}
-                      className="hover:text-gray-600"
-                    >
-                      ×
-                    </button>
-                  )}
-                </div>
+                {controllerSearch && (
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon"
+                    className="absolute right-1 top-1/2 h-7 w-7 -translate-y-1/2"
+                    onClick={() => setControllerSearch("")}
+                  >
+                    <X className="h-4 w-4" />
+                    <span className="sr-only">Clear</span>
+                  </Button>
+                )}
               </div>
 
               {filteredControllers.length === 0 ? (
                 <Card>
                   <CardContent className="py-8">
-                    <p className="text-center text-gray-500">
+                    <p className="text-center text-muted-foreground">
                       {controllerSearch
                         ? `No controllers matching "${controllerSearch}"`
                         : "No endpoints found"}
@@ -673,7 +574,7 @@ export default function Documentation() {
                     onOpenChange={() => toggleControllerExpanded(controller)}
                     className="border rounded-md overflow-hidden shadow-sm"
                   >
-                    <CollapsibleTrigger className="flex items-center justify-between w-full p-4 bg-gray-50 hover:bg-gray-100 transition-colors">
+                    <CollapsibleTrigger className="flex items-center justify-between w-full p-4 bg-muted/50 hover:bg-muted transition-colors">
                       <div className="flex items-center">
                         {expandedControllers[controller] ? (
                           <ChevronDown className="h-5 w-5 mr-2" />
@@ -681,35 +582,34 @@ export default function Documentation() {
                           <ChevronRight className="h-5 w-5 mr-2" />
                         )}
                         <Badge
-                          className={`${getControllerColor(
-                            controller
-                          )} px-3 py-1`}
+                          variant="outline"
+                          className="px-3 py-1"
+                          style={getControllerBadgeStyle(controller)}
                         >
                           {controller}
                         </Badge>
-                        <span className="ml-2 text-sm text-gray-500">
+                        <span className="ml-2 text-sm text-muted-foreground">
                           {controllerEndpoints.length} endpoints
                         </span>
                       </div>
                       <div className="flex items-center space-x-2">
-                        <Badge variant="outline" className="bg-white">
+                        <Badge variant="outline">
                           {controllerEndpoints.filter((e) => e.working).length}{" "}
                           working
                         </Badge>
-                        <Badge variant="outline" className="bg-white">
+                        <Badge variant="outline">
                           {controllerEndpoints.filter((e) => !e.working).length}{" "}
                           not working
                         </Badge>
                       </div>
                     </CollapsibleTrigger>
                     <CollapsibleContent>
-                      <EndpointsTable
-                        endpoints={controllerEndpoints}
-                        getMethodColor={getMethodColor}
-                        getControllerColor={getControllerColor}
-                        toggleEndpointStatus={toggleEndpointStatus}
-                        openEndpointModal={openEndpointModal}
-                        hideController={true}
+                      <EndpointsDataTable
+                        data={controllerEndpoints}
+                        getControllerBadgeStyle={getControllerBadgeStyle}
+                        onToggleStatus={toggleEndpointStatus}
+                        onOpenModal={openEndpointModal}
+                        hideController
                       />
                     </CollapsibleContent>
                   </Collapsible>
@@ -733,139 +633,10 @@ export default function Documentation() {
             )}
             onToggleStatus={toggleEndpointStatus}
             onUpdateNotes={updateEndpointNotes}
-            getControllerColor={getControllerColor}
+            getControllerBadgeStyle={getControllerBadgeStyle}
           />
         )}
       </main>
     </div>
-  );
-}
-
-type EndpointsTableProps = {
-  endpoints: EndpointData[];
-  getMethodColor: (method: string) => string;
-  getControllerColor: (controller: string) => string;
-  toggleEndpointStatus: (path: string, method: string) => void;
-  openEndpointModal: (endpoint: EndpointData) => void;
-  hideController?: boolean;
-};
-
-function EndpointsTable({
-  endpoints,
-  getMethodColor,
-  getControllerColor,
-  toggleEndpointStatus,
-  openEndpointModal,
-  hideController = false,
-}: EndpointsTableProps) {
-  return (
-    <Card className="shadow-sm">
-      <CardHeader>
-        <CardTitle>Endpoints</CardTitle>
-        <CardDescription>Total: {endpoints.length} endpoints</CardDescription>
-      </CardHeader>
-      <CardContent>
-        <div className="border rounded-md overflow-hidden">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Method</TableHead>
-                <TableHead>Path</TableHead>
-                {!hideController && <TableHead>Controller</TableHead>}
-                <TableHead>Operation ID</TableHead>
-                <TableHead>Status</TableHead>
-                <TableHead>Notes</TableHead>
-                <TableHead>Details</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {endpoints.length === 0 ? (
-                <TableRow>
-                  <TableCell
-                    colSpan={hideController ? 6 : 7}
-                    className="text-center py-8 text-gray-500"
-                  >
-                    No endpoints found
-                  </TableCell>
-                </TableRow>
-              ) : (
-                endpoints.map((endpoint, index) => (
-                  <TableRow
-                    key={`${endpoint.path}-${endpoint.method}-${index}`}
-                    className={endpoint.working ? "bg-green-50" : "bg-red-50"}
-                  >
-                    <TableCell>
-                      <span
-                        className={`inline-block px-2 py-1 rounded text-xs font-bold uppercase ${getMethodColor(
-                          endpoint.method
-                        )}`}
-                      >
-                        {endpoint.method}
-                      </span>
-                    </TableCell>
-                    <TableCell className="font-medium">
-                      {endpoint.path}
-                    </TableCell>
-                    {!hideController && (
-                      <TableCell>
-                        <Badge
-                          className={getControllerColor(endpoint.controller)}
-                        >
-                          {endpoint.controller}
-                        </Badge>
-                      </TableCell>
-                    )}
-                    <TableCell>{endpoint.operationId}</TableCell>
-                    <TableCell>
-                      <Button
-                        variant={endpoint.working ? "default" : "outline"}
-                        size="sm"
-                        onClick={() =>
-                          toggleEndpointStatus(endpoint.path, endpoint.method)
-                        }
-                        className="flex items-center"
-                      >
-                        {endpoint.working ? (
-                          <>
-                            <Check className="h-4 w-4 mr-1" /> Working
-                          </>
-                        ) : (
-                          <>
-                            <X className="h-4 w-4 mr-1" /> Not Working
-                          </>
-                        )}
-                      </Button>
-                    </TableCell>
-                    <TableCell>
-                      {endpoint.notes ? (
-                        <div
-                          className="max-w-[200px] truncate"
-                          title={endpoint.notes}
-                        >
-                          {endpoint.notes}
-                        </div>
-                      ) : (
-                        <span className="text-gray-400 text-sm">No notes</span>
-                      )}
-                    </TableCell>
-                    <TableCell>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => openEndpointModal(endpoint)}
-                        className="flex items-center"
-                      >
-                        <Info className="h-4 w-4" />
-                        <span className="sr-only">View Details</span>
-                      </Button>
-                    </TableCell>
-                  </TableRow>
-                ))
-              )}
-            </TableBody>
-          </Table>
-        </div>
-      </CardContent>
-    </Card>
   );
 }

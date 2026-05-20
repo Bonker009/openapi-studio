@@ -106,9 +106,15 @@ export default function TestCaseGeneratorPanel({
 
   const handleRunTestCase = async (testCase: any, idx: number) => {
     setRunningIndex(idx);
+    const authToken =
+      selectedKey && tokens[selectedKey] ? tokens[selectedKey] : token;
     try {
-      // Use the server-side runTestCase
-      const result = await serverRunTestCase(testCase, apiUrl + path);
+      const result = await serverRunTestCase(
+        testCase,
+        apiUrl + path,
+        method,
+        authToken
+      );
       setResults((prev) => ({
         ...prev,
         [idx]: {
@@ -250,8 +256,8 @@ export default function TestCaseGeneratorPanel({
                   No Test Cases Generated
                 </h3>
                 <p className="text-muted-foreground mb-4 max-w-md">
-                  Click "Generate Test Cases" to create comprehensive test
-                  scenarios based on your request sample.
+                  Click &ldquo;Generate Test Cases&rdquo; to create comprehensive
+                  test scenarios based on your request sample.
                 </p>
                 {!requestSample && (
                   <Alert className="max-w-md">

@@ -1,5 +1,4 @@
 "use server";
-import { spawn } from "child_process";
 
 interface FetchTesterResponse<T> {
   data: T | null;
@@ -10,77 +9,47 @@ interface FetchTesterResponse<T> {
   error?: string;
 }
 
-export async function FetchTester<T = any>(
+export async function FetchTester<T = unknown>(
   url: string,
   requestOptions: RequestInit
 ): Promise<FetchTesterResponse<T>> {
-  const method = requestOptions.method || "GET";
-  const headers = requestOptions.headers || {};
-  const body = requestOptions.body;
-
-  const curlArgs: string[] = ["-s", "-w", "\n%{http_code}", "-X", method];
-
-  // Add headers
-  for (const [key, value] of Object.entries(headers)) {
-    curlArgs.push("-H", `${key}: ${value}`);
-  }
-
-  // Add body
-  if (body && method !== "GET") {
-    let jsonBody: string;
-    try {
-      jsonBody =
-        typeof body === "string"
-          ? JSON.stringify(JSON.parse(body))
-          : JSON.stringify(body);
-    } catch {
-      jsonBody = typeof body === "string" ? body : String(body);
-    }
-    curlArgs.push("--data", jsonBody);
-  }
-
-  // Add URL
-  curlArgs.push(url);
-
   const startTime = performance.now();
 
-  return new Promise((resolve) => {
-    const curl = spawn("curl", curlArgs);
-    let stdout = "";
-    let stderr = "";
+  try {
+    const response = await fetch(url, requestOptions);
+    const endTime = performance.now();
+    const responseTime = Math.round(endTime - startTime);
 
-    curl.stdout.on("data", (data) => {
-      stdout += data.toString();
+    const responseHeaders: Record<string, string> = {};
+    response.headers.forEach((value, key) => {
+      responseHeaders[key] = value;
     });
 
-    curl.stderr.on("data", (data) => {
-      stderr += data.toString();
-    });
+    const text = await response.text();
+    let data: T | null = null;
+    try {
+      data = text ? (JSON.parse(text) as T) : null;
+    } catch {
+      data = text as unknown as T;
+    }
 
-    curl.on("close", (code) => {
-      const endTime = performance.now();
-      const responseTime = Math.round(endTime - startTime);
-
-      const lines = stdout.split("\n").filter(Boolean);
-      const statusCodeStr = lines[lines.length - 1].trim();
-      const rawBody = lines.slice(0, -1).join("\n");
-      const status = parseInt(statusCodeStr, 10);
-
-      let data: T | null = null;
-      try {
-        data = rawBody ? JSON.parse(rawBody) : null;
-      } catch {
-        data = rawBody as unknown as T;
-      }
-
-      resolve({
-        data,
-        status,
-        statusText: stderr || "Status from curl",
-        headers: {},
-        responseTime,
-        error: code !== 0 ? `Exited with code ${code}` : undefined,
-      });
-    });
-  });
+    return {
+      data,
+      status: response.status,
+      statusText: response.statusText,
+      headers: responseHeaders,
+      responseTime,
+      error: response.ok ? undefined : response.statusText,
+    };
+  } catch (error) {
+    const endTime = performance.now();
+    return {
+      data: null,
+      status: 0,
+      statusText: "Request failed",
+      headers: {},
+      responseTime: Math.round(endTime - startTime),
+      error: error instanceof Error ? error.message : String(error),
+    };
+  }
 }

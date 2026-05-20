@@ -1,63 +1,63 @@
 "use server";
-import { exec } from "child_process";
-import util from "util";
-
-const execPromise = util.promisify(exec);
 
 export interface TestCase {
   name: string;
   description: string;
-  body: Record<string, any>;
-  expectedStatus: number;
+  body: Record<string, unknown>;
+  expectedStatus?: number;
 }
 
 export interface TestCaseResult {
   name: string;
   status: number | string;
   ok: boolean;
-  response: any;
+  response: unknown;
 }
 
 export async function runTestCase(
   testCase: TestCase,
-  apiUrl: string
+  apiUrl: string,
+  method = "POST",
+  token?: string
 ): Promise<TestCaseResult> {
-  console.log(`Running test case: ${testCase.name}`);
-  console.log(apiUrl);
   try {
-    // Safely stringify JSON and escape quotes
-    const jsonBody = JSON.stringify(testCase.body).replace(/"/g, '\\"');
-
-    // Use double quotes outside, escaped quotes inside
-    const curlCmd = [
-      `curl -s -w "\\n%{http_code}"`,
-      `-X POST`,
-      `-H "Content-Type: application/json"`,
-      `-d "${jsonBody}"`,
-      `"${apiUrl}"`,
-    ].join(" ");
-
-    console.log(`Executing command: ${curlCmd}`);
-
-    const { stdout } = await execPromise(curlCmd);
-    console.log(`Command output: ${stdout}`);
-
-    const splitIndex = stdout.lastIndexOf("\n");
-    const bodyStr = stdout.slice(0, splitIndex);
-    const statusStr = stdout.slice(splitIndex + 1).trim();
-    const status = parseInt(statusStr, 10);
-
-    let data: any = {};
-    try {
-      data = JSON.parse(bodyStr);
-    } catch {
-      data = bodyStr;
+    const headers: Record<string, string> = {
+      "Content-Type": "application/json",
+    };
+    if (token?.trim()) {
+      headers.Authorization = `Bearer ${token.trim()}`;
     }
+
+    const upperMethod = method.toUpperCase();
+    const init: RequestInit = { method: upperMethod, headers };
+
+    if (
+      upperMethod !== "GET" &&
+      upperMethod !== "HEAD" &&
+      testCase.body != null
+    ) {
+      init.body = JSON.stringify(testCase.body);
+    }
+
+    const response = await fetch(apiUrl, init);
+    const text = await response.text();
+    let data: unknown = text;
+    try {
+      data = text ? JSON.parse(text) : {};
+    } catch {
+      // keep raw text
+    }
+
+    const status = response.status;
+    const ok =
+      testCase.expectedStatus != null
+        ? status === testCase.expectedStatus
+        : response.ok;
 
     return {
       name: testCase.name,
-      status: isNaN(status) ? "error" : status,
-      ok: status >= 200 && status < 300,
+      status,
+      ok,
       response: data,
     };
   } catch (error) {
@@ -65,20 +65,20 @@ export async function runTestCase(
       name: testCase.name,
       status: "error",
       ok: false,
-      response: String(error),
+      response: error instanceof Error ? error.message : String(error),
     };
   }
 }
 
 export async function runTestCases(
   testCases: TestCase[],
-  apiUrl: string
+  apiUrl: string,
+  method = "POST",
+  token?: string
 ): Promise<TestCaseResult[]> {
   const results: TestCaseResult[] = [];
   for (const testCase of testCases) {
-    // eslint-disable-next-line no-await-in-loop
-    const result = await runTestCase(testCase, apiUrl);
-    results.push(result);
+    results.push(await runTestCase(testCase, apiUrl, method, token));
   }
   return results;
 }

@@ -228,8 +228,8 @@ export function BulkImportDialog({
               headers)
             </p>
             <p className="text-amber-800 text-xs mt-1">
-              Add a "fields" object to specify request body fields for each test
-              case
+              Add a &quot;fields&quot; object to specify request body fields for each
+              test case
             </p>
           </div>
         </div>

@@ -438,7 +438,7 @@ export function TestCaseManager({
                     onChange={(e) => setNewTestCaseName(e.target.value)}
                   />
                   <p className="text-xs text-muted-foreground">
-                    Prefix with "Group Title -" to organize test cases into
+                    Prefix with &quot;Group Title -&quot; to organize test cases into
                     groups
                   </p>
                 </div>

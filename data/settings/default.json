@@ -1,0 +1,17 @@
+{
+  "expandedControllers": {
+    "workspace-controller": true,
+    "post-controller": true,
+    "comment-controller": true,
+    "profile-controller": true,
+    "generation-controller": true,
+    "post-participant-controller": true,
+    "reaction-controller": true,
+    "survey-controller": true,
+    "poll-controller": true,
+    "invitation-controller": true,
+    "file-controller": true,
+    "endorsement-controller": true,
+    "auth-controller": true
+  }
+}

@@ -1,18 +1,22 @@
 "use client";
+
+import { useEffect, useState, type CSSProperties, type ReactNode } from "react";
 import RandExp from "randexp";
-import { useState } from "react";
 import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
+  Sheet,
+  SheetContent,
+  SheetDescription,
+  SheetHeader,
+  SheetTitle,
+} from "@/components/ui/sheet";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
 import { Check, X, Copy } from "lucide-react";
-import { MarkdownEditor } from "./markdown-editor";
+import {
+  MarkdownEditor,
+  type MarkdownSaveStatus,
+} from "./markdown-editor";
 import { MarkdownHelpModal } from "./markdown-help-modal";
 import {
   Accordion,
@@ -20,11 +24,32 @@ import {
   AccordionItem,
   AccordionTrigger,
 } from "@/components/ui/accordion";
-import CustomDialogContent from "./custom-dialog-variants";
-import { ApiTester } from "./api-tester";
-import { Prism as SyntaxHighlighter } from "react-syntax-highlighter";
-import { vscDarkPlus } from "react-syntax-highlighter/dist/esm/styles/prism";
-import TestCaseGeneratorPanel from "./TestCaseGeneratorPanel";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
+import { Separator } from "@/components/ui/separator";
+import { MethodBadge } from "@/components/method-badge";
+import { CodeBlock } from "@/components/endpoint-modal/code-block";
+import { toast } from "sonner";
+import {
+  getRequestBodySchema,
+  getResponseBodySchema,
+  resolveOpenApiSchema,
+  schemaRefLabel,
+  schemaTypeLabel,
+} from "@/lib/openapi-schema";
+
+const tabPanelClass =
+  "mt-0 min-h-0 flex-1 overflow-y-auto px-6 py-4 outline-none data-[state=inactive]:hidden";
+
+function ModalTabPanel({ children }: { children: ReactNode }) {
+  return <div className="pb-6 pr-1">{children}</div>;
+}
 
 type EndpointDetailModalProps = {
   isOpen: boolean;
@@ -39,7 +64,7 @@ type EndpointDetailModalProps = {
   };
   onToggleStatus: (path: string, method: string) => void;
   onUpdateNotes: (path: string, method: string, notes: string) => void;
-  getControllerColor: (controller: string) => string;
+  getControllerBadgeStyle: (controller: string) => CSSProperties;
 };
 
 export function EndpointDetailModal({
@@ -52,42 +77,47 @@ export function EndpointDetailModal({
   status,
   onToggleStatus,
   onUpdateNotes,
-  getControllerColor,
+  getControllerBadgeStyle,
 }: EndpointDetailModalProps) {
+  const [draft, setDraft] = useState(status.notes || "");
+  const [saveStatus, setSaveStatus] = useState<MarkdownSaveStatus>("idle");
+
+  useEffect(() => {
+    setDraft(status.notes || "");
+    setSaveStatus("idle");
+  }, [path, method, status.notes, isOpen]);
+
+  useEffect(() => {
+    if (!isOpen || !endpoint) return;
+    const saved = status.notes || "";
+    if (draft === saved) {
+      setSaveStatus("idle");
+      return;
+    }
+    setSaveStatus("saving");
+    const timer = setTimeout(() => {
+      void (async () => {
+        try {
+          await onUpdateNotes(path, method, draft);
+          setSaveStatus("saved");
+        } catch {
+          setSaveStatus("idle");
+        }
+      })();
+    }, 500);
+    return () => clearTimeout(timer);
+  }, [draft, path, method, isOpen, endpoint, status.notes]);
+
   if (!endpoint) return null;
 
   const methodData = apiData.paths[path][method.toLowerCase()];
-  const methodColor = getMethodColor(method);
 
-  function getMethodColor(method: string) {
-    switch (method.toUpperCase()) {
-      case "GET":
-        return "bg-blue-100 text-blue-800";
-      case "POST":
-        return "bg-green-100 text-green-800";
-      case "PUT":
-        return "bg-yellow-100 text-yellow-800";
-      case "DELETE":
-        return "bg-red-100 text-red-800";
-      case "PATCH":
-        return "bg-orange-100 text-orange-800";
-      default:
-        return "bg-gray-100 text-gray-800";
-    }
-  }
-
-  // Function to copy text to clipboard
-  function copyToClipboard(text: string) {
+  const copyPath = () => {
     navigator.clipboard
-      .writeText(text)
-      .then(() => {
-        // Could add a toast notification here
-        console.log("Copied to clipboard");
-      })
-      .catch((err) => {
-        console.error("Failed to copy: ", err);
-      });
-  }
+      .writeText(path)
+      .then(() => toast.success("Path copied"))
+      .catch(() => toast.error("Failed to copy path"));
+  };
 
   function generateSampleRequest(schema: any, components: any): any {
     if (!schema) return null;
@@ -106,7 +136,7 @@ export function EndpointDetailModal({
         Object.keys(schema.properties).forEach((propName) => {
           const isRequired =
             schema.required && schema.required.includes(propName);
-          if (isRequired || Math.random() > 0.3) {
+          if (isRequired) {
             result[propName] = generateSampleRequest(
               schema.properties[propName],
               components
@@ -151,467 +181,496 @@ export function EndpointDetailModal({
     return null;
   }
 
-  // Get request body schema
-  const requestBodySchema =
-    methodData?.requestBody?.content?.["application/json"]?.schema;
+  const requestBodySchema = getRequestBodySchema(methodData);
+  const responseBodySchema = getResponseBodySchema(methodData);
+
+  const resolvedRequestSchema = requestBodySchema
+    ? resolveOpenApiSchema(requestBodySchema, apiData.components)
+    : null;
+  const resolvedResponseSchema = responseBodySchema
+    ? resolveOpenApiSchema(responseBodySchema, apiData.components)
+    : null;
+
   const requestSample = requestBodySchema
     ? generateSampleRequest(requestBodySchema, apiData.components)
     : null;
 
-  // Get response schema
-  const responseSchema =
-    methodData?.responses?.["200"]?.content?.["*/*"]?.schema;
-  const responseSample = responseSchema
-    ? generateSampleRequest(responseSchema, apiData.components)
+  const responseSample = responseBodySchema
+    ? generateSampleRequest(responseBodySchema, apiData.components)
     : null;
 
-  const [apiUrl, setApiUrl] = useState(
-    apiData.servers?.[0]?.url || "http://localhost:8080"
-  );
-  const [token, setToken] = useState("");
+  const baseUrl =
+    apiData.servers?.[0]?.url ?? "http://localhost:8080";
+
+  const buildSampleUrl = () => {
+    const resolvedPath = path.replace(/{([^}]+)}/g, (match, param) => {
+      const parameter = methodData.parameters?.find(
+        (p: any) => p.name === param
+      );
+      if (parameter?.schema?.format === "uuid") {
+        return "123e4567-e89b-12d3-a456-426614174000";
+      }
+      return match;
+    });
+    const query = (methodData.parameters ?? [])
+      .filter((p: any) => p.in === "query")
+      .map((p: any, i: number) => {
+        let value = "value";
+        if (p.schema?.type === "boolean") value = "true";
+        if (p.schema?.type === "integer") value = "1";
+        return `${i > 0 ? "&" : ""}${p.name}=${value}`;
+      })
+      .join("");
+    return `${baseUrl}${resolvedPath}${query ? `?${query}` : ""}`;
+  };
+
+  const responseCodeVariant = (code: string) => {
+    if (code.startsWith("2")) return "bg-teal-100 text-teal-800 border-teal-200";
+    if (code.startsWith("4"))
+      return "bg-destructive/10 text-destructive border-destructive/20";
+    if (code.startsWith("5")) return "bg-amber-100 text-amber-800 border-amber-200";
+    return "bg-primary/10 text-primary border-primary/20";
+  };
 
   return (
-    <Dialog open={isOpen} onOpenChange={onClose}>
-      <CustomDialogContent size="full" className="px-12 py-10 flex flex-col">
-        <DialogHeader className="">
-          <DialogTitle className="flex items-center justify-between jus gap-2">
-            <div>
-              <span
-                className={`px-2  rounded text-xs font-bold uppercase ${methodColor}`}
-              >
-                {method}
-              </span>
-              <span className="text-xl">{path}</span>
-            </div>
-            <div className="">
-              <Button
-                variant={status.working ? "default" : "outline"}
-                size="sm"
-                onClick={() => onToggleStatus(path, method)}
-                className="flex items-center"
-              >
-                {status.working ? (
-                  <>
-                    <Check className="h-4 w-4 mr-1" /> Working
-                  </>
-                ) : (
-                  <>
-                    <X className="h-4 w-4 mr-1" /> Not Working
-                  </>
-                )}
-              </Button>
-            </div>
-          </DialogTitle>
-          <DialogDescription className="flex items-center gap-2">
-            <span>{methodData.operationId}</span>
-            {methodData.tags && methodData.tags.length > 0 && (
-              <span className="ml-2">
-                {methodData.tags.map((tag: string) => (
+    <Sheet
+      open={isOpen}
+      onOpenChange={(open) => {
+        if (!open) onClose();
+      }}
+    >
+      <SheetContent
+        side="right"
+        className="flex h-full max-h-[100dvh] flex-col gap-0 overflow-hidden p-0 w-full sm:max-w-none sm:w-[min(95vw,1100px)]"
+      >
+        <SheetHeader className="shrink-0 border-b px-6 py-4 space-y-3 text-left">
+          <SheetTitle className="sr-only">
+            {method} {path}
+          </SheetTitle>
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+            <div className="min-w-0 flex-1 space-y-2 pr-8">
+              <div className="flex flex-wrap items-center gap-2">
+                <MethodBadge method={method} className="text-xs" />
+                <code className="text-base sm:text-lg font-mono font-medium break-all">
+                  {path}
+                </code>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="icon"
+                  className="h-8 w-8 shrink-0"
+                  onClick={copyPath}
+                >
+                  <Copy className="h-4 w-4" />
+                  <span className="sr-only">Copy path</span>
+                </Button>
+              </div>
+              <SheetDescription className="flex flex-wrap items-center gap-2 text-sm">
+                <span className="font-mono text-muted-foreground">
+                  {methodData.operationId}
+                </span>
+                {methodData.tags?.map((tag: string) => (
                   <Badge
                     key={tag}
-                    className={`mr-1 ${getControllerColor(tag)}`}
+                    variant="outline"
+                    style={getControllerBadgeStyle(tag)}
                   >
                     {tag}
                   </Badge>
                 ))}
-              </span>
-            )}
-          </DialogDescription>
-        </DialogHeader>
+              </SheetDescription>
+            </div>
+            <Button
+              variant={status.working ? "default" : "outline"}
+              size="sm"
+              onClick={() => onToggleStatus(path, method)}
+              className="shrink-0 flex items-center"
+            >
+              {status.working ? (
+                <>
+                  <Check className="h-4 w-4 mr-1" /> Working
+                </>
+              ) : (
+                <>
+                  <X className="h-4 w-4 mr-1" /> Not Working
+                </>
+              )}
+            </Button>
+          </div>
+        </SheetHeader>
 
-        <Tabs defaultValue="details">
-          <TabsList className="grid w-full grid-cols-7">
-            <TabsTrigger value="details">Details</TabsTrigger>
-            <TabsTrigger value="schema">Schema</TabsTrigger>
-            <TabsTrigger value="request">Request Sample</TabsTrigger>
-            <TabsTrigger value="response">Response Sample</TabsTrigger>
+        <Tabs
+          defaultValue="details"
+          className="flex min-h-0 flex-1 flex-col overflow-hidden gap-0"
+        >
+          <div className="shrink-0 border-b bg-background px-6 py-2">
+            <TabsList className="grid w-full grid-cols-3 sm:grid-cols-5 h-auto gap-1">
+              <TabsTrigger value="details" className="text-xs sm:text-sm">
+                Details
+              </TabsTrigger>
+              <TabsTrigger value="schema" className="text-xs sm:text-sm">
+                Schema
+              </TabsTrigger>
+              <TabsTrigger value="request" className="text-xs sm:text-sm">
+                Request
+              </TabsTrigger>
+              <TabsTrigger value="response" className="text-xs sm:text-sm">
+                Response
+              </TabsTrigger>
+              <TabsTrigger value="notes" className="text-xs sm:text-sm">
+                Notes
+              </TabsTrigger>
+            </TabsList>
+          </div>
 
-            <TabsTrigger value="notes">Notes</TabsTrigger>
-          </TabsList>
-
-          <TabsContent value="details" className="space-y-6">
+          <TabsContent value="details" className={tabPanelClass}>
+            <ModalTabPanel>
+            <div className="space-y-6">
             {/* Parameters Section */}
             <Accordion
               type="multiple"
               defaultValue={["parameters", "requestBody", "responses"]}
             >
               <AccordionItem value="parameters">
-                <AccordionTrigger className="text-lg font-semibold flex items-center gap-2">
-                  <span>🧩</span> Parameters
+                <AccordionTrigger className="text-base font-semibold">
+                  Parameters
                 </AccordionTrigger>
                 <AccordionContent>
                   {methodData.parameters && methodData.parameters.length > 0 ? (
-                    <div className="border rounded-md overflow-hidden">
-                      <table className="min-w-full divide-y divide-gray-200">
-                        <thead className="bg-gray-50">
-                          <tr>
-                            <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                              Name
-                            </th>
-                            <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                              In
-                            </th>
-                            <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                              Type
-                            </th>
-                            <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                              Required
-                            </th>
-                            <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                              Description
-                            </th>
-                          </tr>
-                        </thead>
-                        <tbody className="bg-white divide-y divide-gray-100">
+                    <div className="rounded-md border overflow-hidden">
+                      <Table>
+                        <TableHeader>
+                          <TableRow>
+                            <TableHead>Name</TableHead>
+                            <TableHead>In</TableHead>
+                            <TableHead>Type</TableHead>
+                            <TableHead>Required</TableHead>
+                            <TableHead>Description</TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
                           {methodData.parameters.map(
                             (param: any, i: number) => (
-                              <tr key={i} className="hover:bg-gray-50">
-                                <td className="px-4 py-2 text-sm font-medium">
+                              <TableRow key={i}>
+                                <TableCell className="font-medium">
                                   {param.name}
-                                </td>
-                                <td className="px-4 py-2 text-sm">
-                                  {param.in}
-                                </td>
-                                <td className="px-4 py-2 text-sm">
-                                  {param.schema?.type ||
-                                    param.schema?.$ref?.split("/").pop() ||
-                                    "-"}
-                                </td>
-                                <td className="px-4 py-2 text-sm">
+                                </TableCell>
+                                <TableCell>{param.in}</TableCell>
+                                <TableCell className="font-mono text-xs">
+                                  {schemaTypeLabel(param.schema)}
+                                </TableCell>
+                                <TableCell>
                                   {param.required ? (
-                                    <span className="text-green-600 font-semibold">
-                                      Yes
-                                    </span>
+                                    <Badge variant="brand">Yes</Badge>
                                   ) : (
-                                    <span className="text-gray-400">No</span>
+                                    <span className="text-muted-foreground">
+                                      No
+                                    </span>
                                   )}
-                                </td>
-                                <td className="px-4 py-2 text-sm">
+                                </TableCell>
+                                <TableCell className="text-muted-foreground">
                                   {param.description || "-"}
-                                </td>
-                              </tr>
+                                </TableCell>
+                              </TableRow>
                             )
                           )}
-                        </tbody>
-                      </table>
+                        </TableBody>
+                      </Table>
                     </div>
                   ) : (
-                    <div className="text-gray-500 italic px-2 py-4">
+                    <p className="text-muted-foreground italic px-2 py-4">
                       No parameters for this endpoint.
-                    </div>
+                    </p>
                   )}
                 </AccordionContent>
               </AccordionItem>
 
               {/* Request Body Section */}
               <AccordionItem value="requestBody">
-                <AccordionTrigger className="text-lg font-semibold flex items-center gap-2">
-                  <span>📦</span> Request Body
+                <AccordionTrigger className="text-base font-semibold">
+                  Request Body
                 </AccordionTrigger>
                 <AccordionContent>
                   {methodData.requestBody ? (
-                    <div className="border rounded-md p-4 bg-gray-50">
-                      {Object.keys(methodData.requestBody.content).map(
-                        (contentType) => (
-                          <div key={contentType} className="mb-2">
-                            <span className="font-medium">{contentType}</span>
-                            {methodData.requestBody.content[contentType]
-                              .schema && (
-                              <div className="ml-4 text-sm">
-                                Schema:{" "}
-                                <code className="bg-gray-100 px-1 py-0.5 rounded">
-                                  {methodData.requestBody.content[
-                                    contentType
-                                  ].schema.$ref
-                                    ?.split("/")
-                                    .pop() || "Schema"}
-                                </code>
+                    <div className="space-y-4">
+                      {Object.entries(
+                        methodData.requestBody.content as Record<
+                          string,
+                          { schema?: unknown }
+                        >
+                      ).map(([contentType, content]) =>
+                          content.schema ? (
+                            <div
+                              key={contentType}
+                              className="rounded-md border bg-muted/30 p-4 space-y-3"
+                            >
+                              <div className="flex flex-wrap items-center gap-2">
+                                <Badge variant="outline">{contentType}</Badge>
+                                {schemaRefLabel(content.schema) && (
+                                  <span className="font-mono text-sm text-muted-foreground">
+                                    {schemaRefLabel(content.schema)}
+                                  </span>
+                                )}
+                                {methodData.requestBody.required && (
+                                  <Badge variant="destructive">Required</Badge>
+                                )}
                               </div>
-                            )}
-                          </div>
-                        )
-                      )}
-                      {methodData.requestBody.required && (
-                        <div className="text-red-500 text-sm mt-1">
-                          Required
-                        </div>
+                              <CodeBlock
+                                code={JSON.stringify(
+                                  resolveOpenApiSchema(
+                                    content.schema,
+                                    apiData.components
+                                  ),
+                                  null,
+                                  2
+                                )}
+                                maxHeight="max-h-[320px]"
+                              />
+                            </div>
+                          ) : (
+                            <p
+                              key={contentType}
+                              className="text-sm text-muted-foreground"
+                            >
+                              {contentType}: no schema
+                            </p>
+                          )
                       )}
                     </div>
                   ) : (
-                    <div className="text-gray-500 italic px-2 py-4">
+                    <p className="text-muted-foreground italic px-2 py-4">
                       No request body required.
-                    </div>
+                    </p>
                   )}
                 </AccordionContent>
               </AccordionItem>
 
-              {/* Responses Section */}
               <AccordionItem value="responses">
-                <AccordionTrigger className="text-lg font-semibold flex items-center gap-2">
-                  <span>📨</span> Responses
+                <AccordionTrigger className="text-base font-semibold">
+                  Responses
                 </AccordionTrigger>
-                <AccordionContent>
-                  <div className="border rounded-md overflow-hidden">
-                    <table className="min-w-full divide-y divide-gray-200">
-                      <thead className="bg-gray-50">
-                        <tr>
-                          <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                            Status
-                          </th>
-                          <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                            Description
-                          </th>
-                          <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                            Content Type
-                          </th>
-                          <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                            Schema
-                          </th>
-                        </tr>
-                      </thead>
-                      <tbody className="bg-white divide-y divide-gray-100">
+                <AccordionContent className="space-y-4">
+                  <div className="rounded-md border overflow-hidden">
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>Status</TableHead>
+                          <TableHead>Description</TableHead>
+                          <TableHead>Content Type</TableHead>
+                          <TableHead>Schema</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
                         {Object.entries(methodData.responses).map(
                           ([code, response]: [string, any]) => (
-                            <tr key={code} className="hover:bg-gray-50">
-                              <td className="px-4 py-2 text-sm font-medium">
+                            <TableRow key={code}>
+                              <TableCell className="font-medium tabular-nums">
                                 {code}
-                              </td>
-                              <td className="px-4 py-2 text-sm">
-                                {response.description}
-                              </td>
-                              <td className="px-4 py-2 text-sm">
+                              </TableCell>
+                              <TableCell>{response.description}</TableCell>
+                              <TableCell className="text-muted-foreground text-sm">
                                 {response.content
                                   ? Object.keys(response.content).join(", ")
                                   : "-"}
-                              </td>
-                              <td className="px-4 py-2 text-sm">
+                              </TableCell>
+                              <TableCell className="font-mono text-xs">
                                 {response.content
                                   ? Object.values(response.content).map(
                                       (content: any, i: number) => (
                                         <div key={i}>
-                                          {content.schema?.$ref
-                                            ?.split("/")
-                                            .pop() ||
-                                            content.schema?.type ||
-                                            "-"}
+                                          {schemaTypeLabel(content.schema)}
                                         </div>
                                       )
                                     )
                                   : "-"}
-                              </td>
-                            </tr>
+                              </TableCell>
+                            </TableRow>
                           )
                         )}
-                      </tbody>
-                    </table>
+                      </TableBody>
+                    </Table>
                   </div>
+                  {Object.entries(methodData.responses).flatMap(
+                    ([code, response]: [string, any]) =>
+                      response.content
+                        ? Object.entries(response.content)
+                            .filter(([, c]: [string, any]) => c.schema)
+                            .map(([contentType, c]: [string, any]) => (
+                              <div
+                                key={`${code}-${contentType}`}
+                                className="rounded-md border bg-muted/30 p-4 space-y-3"
+                              >
+                                <div className="flex flex-wrap items-center gap-2 text-sm">
+                                  <Badge
+                                    variant="outline"
+                                    className={responseCodeVariant(code)}
+                                  >
+                                    {code}
+                                  </Badge>
+                                  <Badge variant="outline">{contentType}</Badge>
+                                  {schemaRefLabel(c.schema) && (
+                                    <span className="font-mono text-muted-foreground">
+                                      {schemaRefLabel(c.schema)}
+                                    </span>
+                                  )}
+                                </div>
+                                <CodeBlock
+                                  code={JSON.stringify(
+                                    resolveOpenApiSchema(
+                                      c.schema,
+                                      apiData.components
+                                    ),
+                                    null,
+                                    2
+                                  )}
+                                  maxHeight="max-h-[280px]"
+                                />
+                              </div>
+                            ))
+                        : []
+                  )}
                 </AccordionContent>
               </AccordionItem>
             </Accordion>
+            </div>
+            </ModalTabPanel>
           </TabsContent>
 
-          <TabsContent value="schema" className="space-y-4">
-            <div>
-              <h4 className="font-medium mb-2">Request Schema:</h4>
-              <pre className="bg-slate-300 p-4 rounded-md overflow-x-auto text-sm">
-                {methodData.requestBody?.content?.["application/json"]?.schema
-                  ? JSON.stringify(
-                      methodData.requestBody.content["application/json"].schema,
-                      null,
-                      2
-                    )
-                  : "No request schema available"}
-              </pre>
-            </div>
-
-            <div>
-              <h4 className="font-medium mb-2">Response Schema:</h4>
-              <pre className="bg-slate-300 p-4 rounded-md overflow-x-auto text-sm">
-                {methodData.responses["200"]?.content?.["*/*"]?.schema
-                  ? JSON.stringify(
-                      methodData.responses["200"].content["*/*"].schema,
-                      null,
-                      2
-                    )
-                  : "No response schema available"}
-              </pre>
-            </div>
-          </TabsContent>
-
-          <TabsContent value="request" className="space-y-4">
-            <div>
-              <h4 className="font-medium mb-2">Sample Request:</h4>
-              {requestSample ? (
-                <div className="relative group rounded-md overflow-hidden">
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity z-10"
-                    onClick={() =>
-                      copyToClipboard(JSON.stringify(requestSample, null, 2))
-                    }
-                  >
-                    <Copy className="h-4 w-4" />
-                  </Button>
-                  <SyntaxHighlighter
-                    language="json"
-                    style={vscDarkPlus}
-                    customStyle={{
-                      margin: 0,
-                      borderRadius: "0.375rem",
-                    }}
-                  >
-                    {JSON.stringify(requestSample, null, 2)}
-                  </SyntaxHighlighter>
+          <TabsContent value="schema" className={tabPanelClass}>
+            <ModalTabPanel>
+              <div className="space-y-6">
+                <div>
+                  <h4 className="font-medium mb-2 flex flex-wrap items-center gap-2">
+                    <span>Request schema</span>
+                    {schemaRefLabel(requestBodySchema) && (
+                      <Badge variant="outline" className="font-mono font-normal">
+                        {schemaRefLabel(requestBodySchema)}
+                      </Badge>
+                    )}
+                  </h4>
+                  {resolvedRequestSchema ? (
+                    <CodeBlock
+                      code={JSON.stringify(resolvedRequestSchema, null, 2)}
+                      maxHeight="max-h-none"
+                    />
+                  ) : (
+                    <p className="text-muted-foreground text-sm">
+                      No request schema available
+                    </p>
+                  )}
                 </div>
-              ) : (
-                <div className="bg-gray-50 p-4 rounded-md text-gray-500">
-                  No request body required
-                </div>
-              )}
-            </div>
-
-            {methodData.parameters && methodData.parameters.length > 0 && (
-              <div>
-                <h4 className="font-medium mb-2">Sample Request URL:</h4>
-                <div className="bg-gray-50 p-4 rounded-md overflow-x-auto relative group">
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity"
-                    onClick={() => {
-                      const url = `${
-                        apiData.servers && apiData.servers[0]?.url
-                          ? apiData.servers[0].url
-                          : "http://localhost:8080"
-                      }${path.replace(/{([^}]+)}/g, (match, param) => {
-                        const parameter = methodData.parameters.find(
-                          (p: any) => p.name === param
-                        );
-                        if (parameter?.schema?.format === "uuid") {
-                          return "123e4567-e89b-12d3-a456-426614174000";
-                        }
-                        return match;
-                      })}${
-                        methodData.parameters.filter(
-                          (p: any) => p.in === "query"
-                        ).length > 0
-                          ? "?"
-                          : ""
-                      }${methodData.parameters
-                        .filter((p: any) => p.in === "query")
-                        .map((p: any, i: number) => {
-                          let value = "value";
-                          if (p.schema?.type === "boolean") value = "true";
-                          if (p.schema?.type === "integer") value = "1";
-                          return `${i > 0 ? "&" : ""}${p.name}=${value}`;
-                        })
-                        .join("")}`;
-                      copyToClipboard(url);
-                    }}
-                  >
-                    <Copy className="h-4 w-4" />
-                  </Button>
-                  <code className="text-sm">
-                    {apiData.servers && apiData.servers[0]?.url
-                      ? apiData.servers[0].url
-                      : "http://localhost:8080"}
-                    {path.replace(/{([^}]+)}/g, (match, param) => {
-                      const parameter = methodData.parameters.find(
-                        (p: any) => p.name === param
-                      );
-                      if (parameter?.schema?.format === "uuid") {
-                        return "123e4567-e89b-12d3-a456-426614174000";
-                      }
-                      return match;
-                    })}
-                    {methodData.parameters.filter((p: any) => p.in === "query")
-                      .length > 0
-                      ? "?"
-                      : ""}
-                    {methodData.parameters
-                      .filter((p: any) => p.in === "query")
-                      .map((p: any, i: number) => {
-                        let value = "value";
-                        if (p.schema?.type === "boolean") value = "true";
-                        if (p.schema?.type === "integer") value = "1";
-                        return `${i > 0 ? "&" : ""}${p.name}=${value}`;
-                      })
-                      .join("")}
-                  </code>
+                <Separator />
+                <div>
+                  <h4 className="font-medium mb-2 flex flex-wrap items-center gap-2">
+                    <span>Response schema</span>
+                    {schemaRefLabel(responseBodySchema) && (
+                      <Badge variant="outline" className="font-mono font-normal">
+                        {schemaRefLabel(responseBodySchema)}
+                      </Badge>
+                    )}
+                  </h4>
+                  {resolvedResponseSchema ? (
+                    <CodeBlock
+                      code={JSON.stringify(resolvedResponseSchema, null, 2)}
+                      maxHeight="max-h-none"
+                    />
+                  ) : (
+                    <p className="text-muted-foreground text-sm">
+                      No response schema available
+                    </p>
+                  )}
                 </div>
               </div>
-            )}
+            </ModalTabPanel>
           </TabsContent>
 
-          <TabsContent value="response" className="space-y-4">
-            <div>
-              <h4 className="font-medium mb-2">Sample Response (200 OK):</h4>
-              {responseSample ? (
-                <div className="relative group rounded-md overflow-hidden">
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity z-10"
-                    onClick={() =>
-                      copyToClipboard(JSON.stringify(responseSample, null, 2))
-                    }
-                  >
-                    <Copy className="h-4 w-4" />
-                  </Button>
-                  <SyntaxHighlighter
-                    language="json"
-                    style={vscDarkPlus}
-                    customStyle={{
-                      margin: 0,
-                      borderRadius: "0.375rem",
-                    }}
-                  >
-                    {JSON.stringify(responseSample, null, 2)}
-                  </SyntaxHighlighter>
+          <TabsContent value="request" className={tabPanelClass}>
+            <ModalTabPanel>
+              <div className="space-y-6">
+                <div>
+                  <h4 className="font-medium mb-2">Sample request body</h4>
+                  {requestSample ? (
+                    <CodeBlock
+                      code={JSON.stringify(requestSample, null, 2)}
+                    />
+                  ) : (
+                    <p className="text-muted-foreground text-sm p-4 rounded-md border bg-muted/30">
+                      No request body required
+                    </p>
+                  )}
                 </div>
-              ) : (
-                <div className="bg-gray-50 p-4 rounded-md text-gray-500">
-                  No response schema available
-                </div>
-              )}
-            </div>
+                {methodData.parameters?.length > 0 && (
+                  <>
+                    <Separator />
+                    <div>
+                      <div className="flex items-center justify-between mb-2">
+                        <h4 className="font-medium">Sample request URL</h4>
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          className="h-7 gap-1"
+                          onClick={() => {
+                            navigator.clipboard.writeText(buildSampleUrl());
+                            toast.success("URL copied");
+                          }}
+                        >
+                          <Copy className="h-3.5 w-3.5" />
+                          Copy
+                        </Button>
+                      </div>
+                      <code className="block text-xs sm:text-sm font-mono break-all rounded-md border bg-muted/30 p-4">
+                        {buildSampleUrl()}
+                      </code>
+                    </div>
+                  </>
+                )}
+              </div>
+            </ModalTabPanel>
+          </TabsContent>
 
-            {Object.entries(methodData.responses).length > 1 && (
-              <div>
-                <h4 className="font-medium mb-2">Other Response Codes:</h4>
-                <Accordion type="single" collapsible className="w-full">
-                  {Object.entries(methodData.responses)
-                    .filter(([code]) => code !== "200")
-                    .map(([code, response]: [string, any]) => (
-                      <AccordionItem key={code} value={code}>
-                        <AccordionTrigger className="px-4 py-2 bg-gray-50 hover:bg-gray-100 rounded-t-md">
-                          <div className="flex items-center">
-                            <Badge
-                              className={`mr-2 ${
-                                code.startsWith("2")
-                                  ? "bg-green-100 text-green-800"
-                                  : code.startsWith("4")
-                                  ? "bg-red-100 text-red-800"
-                                  : code.startsWith("5")
-                                  ? "bg-orange-100 text-orange-800"
-                                  : "bg-blue-100 text-blue-800"
-                              }`}
-                            >
-                              {code}
-                            </Badge>
-                            <span>{response.description}</span>
-                          </div>
-                        </AccordionTrigger>
-                        <AccordionContent className="bg-gray-50 rounded-b-md border-t overflow-hidden">
-                          <div className="relative group">
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity z-10"
-                              onClick={() =>
-                                copyToClipboard(
-                                  JSON.stringify(
+          <TabsContent value="response" className={tabPanelClass}>
+            <ModalTabPanel>
+              <div className="space-y-6">
+                <div>
+                  <h4 className="font-medium mb-2">Sample response (200 OK)</h4>
+                  {responseSample ? (
+                    <CodeBlock
+                      code={JSON.stringify(responseSample, null, 2)}
+                    />
+                  ) : (
+                    <p className="text-muted-foreground text-sm p-4 rounded-md border bg-muted/30">
+                      No response schema available
+                    </p>
+                  )}
+                </div>
+
+                {Object.entries(methodData.responses).length > 1 && (
+                  <>
+                    <Separator />
+                    <div>
+                      <h4 className="font-medium mb-2">Other response codes</h4>
+                      <Accordion type="single" collapsible className="w-full">
+                        {Object.entries(methodData.responses)
+                          .filter(([code]) => code !== "200")
+                          .map(([code, response]: [string, any]) => (
+                            <AccordionItem key={code} value={code}>
+                              <AccordionTrigger className="px-4 py-2 hover:bg-muted/50">
+                                <div className="flex items-center gap-2">
+                                  <Badge
+                                    variant="outline"
+                                    className={responseCodeVariant(code)}
+                                  >
+                                    {code}
+                                  </Badge>
+                                  <span className="text-sm text-muted-foreground">
+                                    {response.description}
+                                  </span>
+                                </div>
+                              </AccordionTrigger>
+                              <AccordionContent className="pt-2">
+                                <CodeBlock
+                                  code={JSON.stringify(
                                     {
                                       success: code.startsWith("2"),
                                       message: response.description,
@@ -621,90 +680,81 @@ export function EndpointDetailModal({
                                     },
                                     null,
                                     2
-                                  )
-                                )
-                              }
-                            >
-                              <Copy className="h-4 w-4" />
-                            </Button>
-                            <SyntaxHighlighter
-                              language="json"
-                              style={vscDarkPlus}
-                              customStyle={{
-                                margin: 0,
-                                borderRadius: "0.375rem",
-                              }}
-                            >
-                              {JSON.stringify(
-                                {
-                                  success: code.startsWith("2"),
-                                  message: response.description,
-                                  status: code,
-                                  payload: null,
-                                  timestamp: new Date().toISOString(),
-                                },
-                                null,
-                                2
-                              )}
-                            </SyntaxHighlighter>
-                          </div>
-                        </AccordionContent>
-                      </AccordionItem>
-                    ))}
-                </Accordion>
-              </div>
-            )}
+                                  )}
+                                />
+                              </AccordionContent>
+                            </AccordionItem>
+                          ))}
+                      </Accordion>
+                    </div>
+                  </>
+                )}
 
-            {methodData.responses["200"]?.content?.["*/*"]?.schema && (
-              <div>
-                <h4 className="font-medium mb-2">Response Structure:</h4>
-                <div className="bg-slate-300 p-4 rounded-md">
-                  <ul className="space-y-2">
-                    {Object.entries(responseSample || {}).map(
-                      ([key, value]) => (
-                        <li key={key} className="text-sm">
-                          <span className="font-semibold">{key}</span>:
-                          <span className="text-gray-600 ml-2">
-                            {typeof value === "object"
-                              ? Array.isArray(value)
-                                ? "Array"
-                                : "Object"
-                              : typeof value}
-                          </span>
-                          <span className="text-gray-500 ml-2">
-                            {typeof value !== "object" &&
-                            String(value).length < 50
-                              ? `Example: ${String(value)}`
-                              : ""}
-                          </span>
-                        </li>
-                      )
-                    )}
-                  </ul>
-                </div>
+                {methodData.responses["200"]?.content?.["*/*"]?.schema &&
+                  responseSample && (
+                    <>
+                      <Separator />
+                      <div>
+                        <h4 className="font-medium mb-2">Response structure</h4>
+                        <ul className="space-y-2 rounded-md border bg-muted/30 p-4">
+                          {Object.entries(responseSample).map(
+                            ([key, value]) => (
+                              <li
+                                key={key}
+                                className="text-sm flex flex-wrap items-center gap-2"
+                              >
+                                <span className="font-semibold">{key}</span>
+                                <Badge variant="outline">
+                                  {typeof value === "object"
+                                    ? Array.isArray(value)
+                                      ? "Array"
+                                      : "Object"
+                                    : typeof value}
+                                </Badge>
+                                {typeof value !== "object" &&
+                                  String(value).length < 50 && (
+                                    <span className="text-muted-foreground text-xs">
+                                      e.g. {String(value)}
+                                    </span>
+                                  )}
+                              </li>
+                            )
+                          )}
+                        </ul>
+                      </div>
+                    </>
+                  )}
               </div>
-            )}
+            </ModalTabPanel>
           </TabsContent>
 
-          <TabsContent value="notes">
-            <div className="space-y-4">
-              <div className="flex justify-between items-center mb-2">
-                <h4 className="font-medium">Notes:</h4>
+          <TabsContent value="notes" className={tabPanelClass}>
+            <ModalTabPanel>
+              <div className="flex items-center justify-between mb-3">
+                <div>
+                  <h4 className="font-medium">Notes</h4>
+                  <p className="text-xs text-muted-foreground mt-0.5">
+                    Markdown supported. Auto-saved.
+                  </p>
+                </div>
+                <MarkdownHelpModal />
               </div>
               <MarkdownEditor
-                value={status.notes || ""}
-                onChange={(value) => onUpdateNotes(path, method, value)}
+                key={`${path}-${method}`}
+                value={draft}
+                onChange={setDraft}
+                saveStatus={saveStatus}
                 placeholder={
                   status.working
                     ? "Add notes about this endpoint using Markdown...\n\n## Usage\n\n## Examples\n\n## Notes"
                     : "Add comments about why this endpoint is not working using Markdown...\n\n## Issues\n\n## Workarounds\n\n## Todo"
                 }
-                height="min-h-[300px]"
+                height="min-h-[360px]"
               />
-            </div>
+            </ModalTabPanel>
           </TabsContent>
         </Tabs>
-      </CustomDialogContent>
-    </Dialog>
+      </SheetContent>
+    </Sheet>
   );
 }
