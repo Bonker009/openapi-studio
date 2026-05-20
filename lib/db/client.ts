@@ -4,15 +4,27 @@ import Database from "better-sqlite3";
 import { drizzle } from "drizzle-orm/better-sqlite3";
 import * as schema from "./schema";
 
-export const DATA_DIR = path.join(process.cwd(), "data");
+export const DATA_DIR =
+  process.env.DATA_DIR?.trim() || path.join(process.cwd(), "data");
 export const DB_PATH = path.join(DATA_DIR, "app.db");
 
 let sqlite: Database.Database | null = null;
 let dbInstance: ReturnType<typeof drizzle<typeof schema>> | null = null;
 
 function ensureDataDir(): void {
-  if (!fs.existsSync(DATA_DIR)) {
-    fs.mkdirSync(DATA_DIR, { recursive: true });
+  try {
+    if (!fs.existsSync(DATA_DIR)) {
+      fs.mkdirSync(DATA_DIR, { recursive: true, mode: 0o777 });
+    }
+    fs.accessSync(DATA_DIR, fs.constants.R_OK | fs.constants.W_OK);
+  } catch (error) {
+    const hint =
+      process.env.NODE_ENV === "production"
+        ? " Ensure /app/data exists and is writable (Docker: check ./data volume mount)."
+        : "";
+    throw new Error(
+      `Cannot access database directory ${DATA_DIR}.${hint} ${error instanceof Error ? error.message : ""}`
+    );
   }
 }
 

@@ -31,6 +31,7 @@ RUN npm run build
 
 # Stage 3: Runner (same Node major as deps/builder)
 FROM node:24-alpine AS runner
+RUN apk add --no-cache su-exec
 WORKDIR /app
 
 ENV NODE_ENV=production
@@ -48,14 +49,18 @@ COPY --from=builder --chown=nextjs:nodejs /app/package.json ./package.json
 COPY --from=builder --chown=nextjs:nodejs /app/drizzle ./drizzle
 COPY --from=builder --chown=nextjs:nodejs /app/node_modules/better-sqlite3 ./node_modules/better-sqlite3
 
-USER nextjs
+COPY docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh
+RUN chmod +x /usr/local/bin/docker-entrypoint.sh \
+  && mkdir -p /app/data \
+  && chown nextjs:nodejs /app/data
 
 EXPOSE 3000
 
 ENV PORT=3000
 ENV HOSTNAME="0.0.0.0"
+ENV DATA_DIR=/app/data
 ENV NODE_OPTIONS="--dns-result-order=ipv4first"
 ENV INTERNAL_APP_URL="http://127.0.0.1:3000"
 
-CMD ["node", "server.js"]
+ENTRYPOINT ["/usr/local/bin/docker-entrypoint.sh"]
 

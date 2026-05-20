@@ -9,6 +9,7 @@ services:
     environment:
       - NODE_ENV=production
       - NEXT_TELEMETRY_DISABLED=1
+      - DATA_DIR=/app/data
       # DELETE journal avoids WAL shm files on ./data bind mounts (Windows Docker Desktop)
       - SQLITE_JOURNAL_MODE=DELETE
       # Prefer IPv4 for localhost (Next.js internal RSC fetches in Alpine)

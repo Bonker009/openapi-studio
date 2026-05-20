@@ -101,6 +101,19 @@ docker compose build --no-cache
 docker compose up -d
 ```
 
+### `SQLITE_CANTOPEN` / unable to open database file
+
+The app user must be able to write to `./data` on the mounted volume. The image entrypoint creates `/app/data` and fixes permissions before starting Node.
+
+Rebuild and restart:
+
+```bash
+docker compose down
+docker compose up -d --build
+```
+
+On Windows, ensure the host `data` folder exists: `mkdir -p data`. If problems persist, remove stale DB locks: `rm -f data/app.db-wal data/app.db-shm`.
+
 ### Data not persisting
 - Ensure the `data` directory exists and has proper permissions
 - Check volume mount in `docker-compose.yml`
