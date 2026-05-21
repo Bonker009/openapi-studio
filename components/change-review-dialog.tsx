@@ -1,28 +1,23 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
+  Sheet,
+  SheetContent,
+  SheetDescription,
+  SheetFooter,
+  SheetHeader,
+  SheetTitle,
+} from "@/components/ui/sheet";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
-import {
-  Collapsible,
-  CollapsibleContent,
-  CollapsibleTrigger,
-} from "@/components/ui/collapsible";
-import { ChevronDown } from "lucide-react";
+import { Separator } from "@/components/ui/separator";
 import type { DiffSummary } from "@/lib/openapi-diff";
 import { formatDiffCounts } from "@/lib/openapi-diff";
-import { MethodBadge } from "@/components/method-badge";
+import { DiffView } from "@/components/diff/diff-view";
 
 type ChangeReviewDialogProps = {
   open: boolean;
@@ -44,107 +39,79 @@ export function ChangeReviewDialog({
   const [version, setVersion] = useState(suggestedVersion);
   const [note, setNote] = useState("");
 
+  useEffect(() => {
+    if (open) {
+      setVersion(suggestedVersion);
+      setNote("");
+    }
+  }, [open, suggestedVersion]);
+
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
-        <DialogHeader>
-          <DialogTitle>Review API changes</DialogTitle>
-          <DialogDescription>
-            {formatDiffCounts(summary)} — suggested{" "}
-            <Badge variant="info">{summary.suggestedBump}</Badge> bump
-          </DialogDescription>
-        </DialogHeader>
+    <Sheet open={open} onOpenChange={onOpenChange}>
+      <SheetContent
+        side="bottom"
+        className="flex h-[min(92dvh,920px)] max-h-[92dvh] w-full max-w-none flex-col gap-0 overflow-hidden rounded-t-xl border-t p-0"
+      >
+        <SheetHeader className="shrink-0 border-b px-6 py-4 text-left">
+          <SheetTitle>Review API changes</SheetTitle>
+          <SheetDescription asChild>
+            <div className="flex flex-wrap items-center gap-2 pt-1">
+              <span>{formatDiffCounts(summary)}</span>
+              <span className="text-muted-foreground">—</span>
+              <span className="text-muted-foreground">suggested</span>
+              <Badge variant="info" className="capitalize">
+                {summary.suggestedBump}
+              </Badge>
+              <span className="text-muted-foreground">bump</span>
+              {summary.infoChanged && (
+                <Badge variant="outline">API info changed</Badge>
+              )}
+            </div>
+          </SheetDescription>
+        </SheetHeader>
 
-        <div className="space-y-3 text-sm">
-          {summary.added.length > 0 && (
-            <Collapsible defaultOpen>
-              <CollapsibleTrigger className="flex w-full items-center gap-2 font-medium text-teal-700">
-                <ChevronDown className="h-4 w-4" />
-                Added ({summary.added.length})
-              </CollapsibleTrigger>
-              <CollapsibleContent className="mt-2 space-y-1 pl-6">
-                {summary.added.map((e) => (
-                  <div key={`${e.method}-${e.path}`} className="flex gap-2">
-                    <MethodBadge method={e.method} />
-                    <span className="font-mono text-xs">{e.path}</span>
-                  </div>
-                ))}
-              </CollapsibleContent>
-            </Collapsible>
-          )}
-          {summary.removed.length > 0 && (
-            <Collapsible defaultOpen>
-              <CollapsibleTrigger className="flex w-full items-center gap-2 font-medium text-destructive">
-                <ChevronDown className="h-4 w-4" />
-                Removed ({summary.removed.length})
-              </CollapsibleTrigger>
-              <CollapsibleContent className="mt-2 space-y-1 pl-6">
-                {summary.removed.map((e) => (
-                  <div key={`${e.method}-${e.path}`} className="flex gap-2">
-                    <MethodBadge method={e.method} />
-                    <span className="font-mono text-xs">{e.path}</span>
-                  </div>
-                ))}
-              </CollapsibleContent>
-            </Collapsible>
-          )}
-          {summary.changed.length > 0 && (
-            <Collapsible>
-              <CollapsibleTrigger className="flex w-full items-center gap-2 font-medium text-amber-700">
-                <ChevronDown className="h-4 w-4" />
-                Changed ({summary.changed.length})
-              </CollapsibleTrigger>
-              <CollapsibleContent className="mt-2 space-y-1 pl-6">
-                {summary.changed.map((e) => (
-                  <div key={`${e.method}-${e.path}`} className="flex flex-col gap-0.5">
-                    <div className="flex gap-2">
-                      <MethodBadge method={e.method} />
-                      <span className="font-mono text-xs">{e.path}</span>
-                    </div>
-                    <span className="text-xs text-muted-foreground">
-                      {e.reasons.join(", ")}
-                    </span>
-                  </div>
-                ))}
-              </CollapsibleContent>
-            </Collapsible>
-          )}
+        <div className="min-h-0 flex-1 overflow-y-auto px-6 py-4">
+          <DiffView summary={summary} embedded columns={2} />
         </div>
 
-        <div className="space-y-4 pt-2">
-          <div>
-            <Label htmlFor="review-version">Version</Label>
-            <Input
-              id="review-version"
-              value={version}
-              onChange={(e) => setVersion(e.target.value)}
-              className="mt-1"
-            />
+        <SheetFooter className="shrink-0 border-t bg-muted/30 px-6 py-4">
+          <div className="flex w-full flex-col gap-4">
+            <div className="grid gap-4 sm:grid-cols-2">
+              <div>
+                <Label htmlFor="review-version">Version</Label>
+                <Input
+                  id="review-version"
+                  value={version}
+                  onChange={(e) => setVersion(e.target.value)}
+                  className="mt-1 bg-background"
+                />
+              </div>
+              <div>
+                <Label htmlFor="review-note">Changelog note</Label>
+                <Textarea
+                  id="review-note"
+                  value={note}
+                  onChange={(e) => setNote(e.target.value)}
+                  placeholder="What changed in this release?"
+                  className="mt-1 min-h-[72px] bg-background"
+                />
+              </div>
+            </div>
+            <Separator />
+            <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+              <Button variant="outline" onClick={() => onOpenChange(false)}>
+                Cancel
+              </Button>
+              <Button
+                onClick={() => onConfirm(version, note)}
+                disabled={isSaving || !version.trim()}
+              >
+                {isSaving ? "Saving…" : "Save as new version"}
+              </Button>
+            </div>
           </div>
-          <div>
-            <Label htmlFor="review-note">Changelog note</Label>
-            <Textarea
-              id="review-note"
-              value={note}
-              onChange={(e) => setNote(e.target.value)}
-              placeholder="What changed in this release?"
-              className="mt-1 min-h-[80px]"
-            />
-          </div>
-        </div>
-
-        <DialogFooter>
-          <Button variant="outline" onClick={() => onOpenChange(false)}>
-            Cancel
-          </Button>
-          <Button
-            onClick={() => onConfirm(version, note)}
-            disabled={isSaving || !version.trim()}
-          >
-            {isSaving ? "Saving…" : "Save as new version"}
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
+        </SheetFooter>
+      </SheetContent>
+    </Sheet>
   );
 }

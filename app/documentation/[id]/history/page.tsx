@@ -7,9 +7,7 @@ import { Header } from "@/components/header";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Skeleton } from "@/components/ui/skeleton";
-import { MethodBadge } from "@/components/method-badge";
 import {
   listVersions,
   getDiff,
@@ -18,67 +16,17 @@ import {
   type HistoryEntry,
 } from "@/lib/data-service";
 import type { DiffSummary } from "@/lib/openapi-diff";
-import { formatDiffCounts, diffIsEmpty } from "@/lib/openapi-diff";
+import { DiffView } from "@/components/diff/diff-view";
+import { VersionPicker } from "@/components/diff/version-picker";
 import { toast } from "sonner";
 import { useConfirmDialog } from "@/components/confirm-dialog";
-import { RotateCcw, Trash2 } from "lucide-react";
+import { RotateCcw, Trash2, ArrowLeftRight } from "lucide-react";
 
 function formatDate(ts: string) {
   return new Date(Number(ts)).toLocaleString(undefined, {
     dateStyle: "medium",
     timeStyle: "short",
   });
-}
-
-function DiffPanel({ summary }: { summary: DiffSummary | null }) {
-  if (!summary) {
-    return (
-      <p className="text-sm text-muted-foreground py-8 text-center">
-        Select two versions to compare
-      </p>
-    );
-  }
-
-  return (
-    <div className="space-y-4 text-sm">
-      <p className="font-medium">{formatDiffCounts(summary)}</p>
-      {summary.added.map((e) => (
-        <div key={`a-${e.method}-${e.path}`} className="flex gap-2 text-teal-700">
-          <span className="font-medium">+</span>
-          <MethodBadge method={e.method} />
-          <span className="font-mono text-xs">{e.path}</span>
-        </div>
-      ))}
-      {summary.removed.map((e) => (
-        <div
-          key={`r-${e.method}-${e.path}`}
-          className="flex gap-2 text-destructive"
-        >
-          <span className="font-medium">−</span>
-          <MethodBadge method={e.method} />
-          <span className="font-mono text-xs">{e.path}</span>
-        </div>
-      ))}
-      {summary.changed.map((e) => (
-        <div
-          key={`c-${e.method}-${e.path}`}
-          className="flex flex-col gap-0.5 text-amber-800"
-        >
-          <div className="flex gap-2">
-            <span className="font-medium">~</span>
-            <MethodBadge method={e.method} />
-            <span className="font-mono text-xs">{e.path}</span>
-          </div>
-          <span className="text-xs text-muted-foreground pl-5">
-            {e.reasons.join(", ")}
-          </span>
-        </div>
-      ))}
-      {diffIsEmpty(summary) && (
-        <p className="text-muted-foreground">No structural differences</p>
-      )}
-    </div>
-  );
 }
 
 function HistoryPageContent() {
@@ -132,14 +80,23 @@ function HistoryPageContent() {
         setSummary(s);
       } catch {
         setSummary(null);
+        toast.error("Failed to compute diff");
       } finally {
         setDiffLoading(false);
       }
     })();
   }, [id, fromTs, toTs]);
 
+  const handleSwap = () => {
+    if (fromTs === "current" && toTs === "current") return;
+    const newFrom = toTs === "current" ? entries[0]?.ts ?? "" : toTs;
+    const newTo = fromTs || "current";
+    setFromTs(newFrom);
+    setToTs(newTo);
+  };
+
   const handleRestore = async () => {
-    if (!fromTs) return;
+    if (!fromTs || fromTs === "current") return;
     const ok = await confirm({
       title: "Restore this version?",
       description: "Current spec will be replaced and a new history entry created.",
@@ -160,7 +117,7 @@ function HistoryPageContent() {
   const handleDeleteVersion = async (ts: string) => {
     const ok = await confirm({
       title: "Delete snapshot?",
-      description: "This version file will be removed from history.",
+      description: "This version will be removed from history.",
       confirmLabel: "Delete",
       variant: "destructive",
     });
@@ -169,11 +126,20 @@ function HistoryPageContent() {
       await deleteVersion(id, ts);
       toast.success("Version deleted");
       if (fromTs === ts) setFromTs("");
+      if (toTs === ts) setToTs("current");
       await load();
     } catch {
       toast.error("Delete failed");
     }
   };
+
+  const fromLabel = fromTs
+    ? fromTs === "current"
+      ? "Current"
+      : formatDate(fromTs)
+    : "—";
+  const toLabel =
+    toTs === "current" ? "Current" : toTs ? formatDate(toTs) : "—";
 
   return (
     <div className="min-h-screen bg-background">
@@ -185,118 +151,162 @@ function HistoryPageContent() {
         specId={id}
       />
 
-      <main className="container mx-auto py-8 px-4">
-        <div className="flex gap-2 mb-6">
+      <main className="container mx-auto py-8 px-4 max-w-screen-2xl">
+        <div className="flex flex-wrap gap-2 mb-6">
           <Button variant="outline" asChild>
             <Link href={`/documentation/${id}`}>Back to docs</Link>
           </Button>
           <Button
             variant="outline"
-            disabled={!fromTs}
+            disabled={!fromTs || fromTs === "current"}
             onClick={handleRestore}
           >
             <RotateCcw className="h-4 w-4 mr-2" />
-            Restore selected (from)
+            Restore &quot;From&quot; version
           </Button>
         </div>
 
-        <div className="grid lg:grid-cols-[320px_1fr] gap-6">
-          <Card className="shadow-sm h-fit">
-            <CardHeader>
-              <CardTitle className="text-base">Versions</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-2 max-h-[70vh] overflow-y-auto">
-              {loading ? (
-                <Skeleton className="h-12 w-full" />
-              ) : (
-                <>
-                  <button
+        <div className="grid lg:grid-cols-[minmax(280px,320px)_1fr] gap-6">
+          <div className="space-y-4">
+            <Card className="shadow-sm">
+              <CardHeader className="pb-3">
+                <CardTitle className="text-base">Compare versions</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                <VersionPicker
+                  label="From (older)"
+                  value={fromTs}
+                  entries={entries}
+                  onChange={setFromTs}
+                  formatDate={formatDate}
+                />
+                <div className="flex justify-center">
+                  <Button
                     type="button"
-                    onClick={() => {
-                      setToTs("current");
-                    }}
-                    className={`w-full text-left rounded-lg border p-3 text-sm transition-colors ${
-                      toTs === "current"
-                        ? "border-primary bg-primary/5"
-                        : "hover:bg-muted/50"
-                    }`}
+                    variant="outline"
+                    size="icon"
+                    onClick={handleSwap}
+                    title="Swap from and to"
+                    aria-label="Swap versions"
                   >
-                    <Badge variant="brand">Current</Badge>
-                    <p className="text-xs text-muted-foreground mt-1">
-                      Latest saved spec
-                    </p>
-                  </button>
-                  {entries.map((entry) => (
-                    <div
-                      key={entry.ts}
-                      className={`rounded-lg border p-3 text-sm ${
-                        fromTs === entry.ts
-                          ? "border-primary bg-primary/5"
-                          : ""
-                      }`}
-                    >
-                      <div className="flex justify-between items-start gap-2">
-                        <button
-                          type="button"
-                          className="text-left flex-1"
-                          onClick={() => setFromTs(entry.ts)}
-                        >
-                          <Badge variant="info" className="tabular-nums">
-                            v{entry.version}
-                          </Badge>
-                          <p className="text-xs text-muted-foreground mt-1 tabular-nums">
-                            {formatDate(entry.ts)}
-                          </p>
-                          {entry.summaryLabel && (
-                            <p className="text-xs mt-0.5">{entry.summaryLabel}</p>
-                          )}
-                        </button>
+                    <ArrowLeftRight className="h-4 w-4" />
+                  </Button>
+                </div>
+                <VersionPicker
+                  label="To (newer)"
+                  value={toTs}
+                  entries={entries}
+                  onChange={setToTs}
+                  allowCurrent
+                  formatDate={formatDate}
+                />
+              </CardContent>
+            </Card>
+
+            <Card className="shadow-sm">
+              <CardHeader>
+                <CardTitle className="text-base">All versions</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-2 max-h-[50vh] overflow-y-auto">
+                {loading ? (
+                  <Skeleton className="h-12 w-full" />
+                ) : (
+                  <>
+                    <div className="rounded-lg border p-3 text-sm bg-primary/5 border-primary/30">
+                      <Badge variant="brand">Current</Badge>
+                      <p className="text-xs text-muted-foreground mt-1">
+                        Latest saved spec
+                      </p>
+                      <div className="flex gap-1.5 mt-2">
                         <Button
-                          size="icon"
-                          variant="ghost"
-                          className="h-7 w-7 text-destructive shrink-0"
-                          onClick={() => handleDeleteVersion(entry.ts)}
+                          size="xs"
+                          variant={toTs === "current" ? "default" : "outline"}
+                          onClick={() => setToTs("current")}
                         >
-                          <Trash2 className="h-3 w-3" />
+                          Set as To
                         </Button>
                       </div>
-                      <Button
-                        size="xs"
-                        variant="ghost"
-                        className="mt-2 h-6 text-xs"
-                        onClick={() => setToTs(entry.ts)}
-                      >
-                        Compare to this
-                      </Button>
                     </div>
-                  ))}
-                </>
-              )}
-            </CardContent>
-          </Card>
+                    {entries.map((entry) => (
+                      <div
+                        key={entry.ts}
+                        className={`rounded-lg border p-3 text-sm ${
+                          fromTs === entry.ts || toTs === entry.ts
+                            ? "border-primary/40 bg-primary/5"
+                            : ""
+                        }`}
+                      >
+                        <div className="flex justify-between items-start gap-2">
+                          <div className="min-w-0 flex-1">
+                            <Badge variant="info" className="tabular-nums">
+                              v{entry.version}
+                            </Badge>
+                            <p className="text-xs text-muted-foreground mt-1 tabular-nums">
+                              {formatDate(entry.ts)}
+                            </p>
+                            {entry.summaryLabel && (
+                              <p className="text-xs mt-0.5">
+                                {entry.summaryLabel}
+                              </p>
+                            )}
+                            {entry.note && (
+                              <p className="text-xs mt-1 text-foreground/80 line-clamp-2">
+                                {entry.note}
+                              </p>
+                            )}
+                          </div>
+                          <Button
+                            size="icon"
+                            variant="ghost"
+                            className="h-7 w-7 text-destructive shrink-0"
+                            onClick={() => handleDeleteVersion(entry.ts)}
+                          >
+                            <Trash2 className="h-3 w-3" />
+                          </Button>
+                        </div>
+                        <div className="flex flex-wrap gap-1.5 mt-2">
+                          <Button
+                            size="xs"
+                            variant={
+                              fromTs === entry.ts ? "default" : "outline"
+                            }
+                            onClick={() => setFromTs(entry.ts)}
+                          >
+                            Set as From
+                          </Button>
+                          <Button
+                            size="xs"
+                            variant={toTs === entry.ts ? "default" : "outline"}
+                            onClick={() => setToTs(entry.ts)}
+                          >
+                            Set as To
+                          </Button>
+                        </div>
+                      </div>
+                    ))}
+                  </>
+                )}
+              </CardContent>
+            </Card>
+          </div>
 
-          <Card className="shadow-sm">
-            <CardHeader>
-              <CardTitle className="text-base">
-                Diff: {fromTs ? formatDate(fromTs) : "—"} →{" "}
-                {toTs === "current" ? "Current" : formatDate(toTs)}
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <Tabs defaultValue="summary">
-                <TabsList>
-                  <TabsTrigger value="summary">Summary</TabsTrigger>
-                </TabsList>
-                <TabsContent value="summary" className="mt-4">
-                  {diffLoading ? (
-                    <Skeleton className="h-32 w-full" />
-                  ) : (
-                    <DiffPanel summary={summary} />
-                  )}
-                </TabsContent>
-              </Tabs>
-            </CardContent>
-          </Card>
+          <div className="space-y-3 min-w-0">
+            <div className="flex flex-wrap items-center gap-2">
+              <h2 className="text-base font-semibold">
+                Changes: {fromLabel} → {toLabel}
+              </h2>
+              {summary && (
+                <Badge variant="info" className="capitalize">
+                  Suggested {summary.suggestedBump}
+                </Badge>
+              )}
+            </div>
+            <DiffView
+              summary={summary}
+              loading={diffLoading}
+              showSuggestedBump={false}
+            />
+          </div>
         </div>
       </main>
     </div>
