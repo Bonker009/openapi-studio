@@ -1,5 +1,7 @@
 "use server";
 
+import { performHttpRequest } from "@/lib/playground/perform-http-request-server";
+
 export interface TestCase {
   name: string;
   description: string;
@@ -39,26 +41,28 @@ export async function runTestCase(
       init.body = JSON.stringify(testCase.body);
     }
 
-    const response = await fetch(apiUrl, init);
-    const text = await response.text();
-    let data: unknown = text;
-    try {
-      data = text ? JSON.parse(text) : {};
-    } catch {
-      // keep raw text
+    const result = await performHttpRequest(apiUrl, init);
+
+    if (result.status === 0) {
+      return {
+        name: testCase.name,
+        status: "error",
+        ok: false,
+        response: result.error ?? "Request failed",
+      };
     }
 
-    const status = response.status;
+    const status = result.status;
     const ok =
       testCase.expectedStatus != null
         ? status === testCase.expectedStatus
-        : response.ok;
+        : status >= 200 && status < 300;
 
     return {
       name: testCase.name,
       status,
       ok,
-      response: data,
+      response: result.data,
     };
   } catch (error) {
     return {

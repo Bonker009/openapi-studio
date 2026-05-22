@@ -1,21 +1,19 @@
 import { type NextRequest, NextResponse } from "next/server";
-import {
-  validateSpecId,
-  readSpecSnapshot,
-} from "@/lib/spec-versioning";
+import { readSpecSnapshot } from "@/lib/spec-versioning";
 import { diffOpenApi } from "@/lib/openapi-diff";
+import { guardDataRoute, invalidIdResponse, validateDataId } from "@/lib/security/data-api";
 
 export async function GET(request: NextRequest) {
+  const denied = guardDataRoute(request);
+  if (denied) return denied;
+
   const params = request.nextUrl.searchParams;
   const id = params.get("id");
   const from = params.get("from");
   const to = params.get("to") || "current";
 
-  if (!id || !validateSpecId(id) || !from) {
-    return NextResponse.json(
-      { error: "Missing or invalid id/from parameters" },
-      { status: 400 }
-    );
+  if (!id || !validateDataId(id) || !from) {
+    return invalidIdResponse();
   }
 
   try {

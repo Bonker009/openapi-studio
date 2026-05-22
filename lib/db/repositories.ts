@@ -181,6 +181,7 @@ export function listCanonicalSpecIds(): string[] {
 export type SpecListItem = {
   id: string;
   title: string;
+  description?: string;
   version: string;
   lastModified: string;
 };
@@ -190,12 +191,14 @@ export function listSpecSummaries(): SpecListItem[] {
   const rows = getDb().select().from(specs).all();
   return rows.map((row) => {
     try {
-      const data = parseJson<{ info?: { title?: string; version?: string } }>(
-        row.openapiJson
-      );
+      const data = parseJson<{
+        info?: { title?: string; version?: string; description?: string };
+      }>(row.openapiJson);
+      const description = data.info?.description?.trim();
       return {
         id: row.id,
         title: data.info?.title || row.id,
+        description: description || undefined,
         version: data.info?.version || "unknown",
         lastModified: new Date(row.updatedAt).toISOString(),
       };

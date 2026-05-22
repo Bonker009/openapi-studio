@@ -1,19 +1,17 @@
 import { type NextRequest, NextResponse } from "next/server";
-import {
-  validateSpecId,
-  deleteVersionSnapshot,
-} from "@/lib/spec-versioning";
+import { deleteVersionSnapshot } from "@/lib/spec-versioning";
+import { guardDataRoute, invalidIdResponse, validateDataId } from "@/lib/security/data-api";
 
 export async function DELETE(request: NextRequest) {
+  const denied = guardDataRoute(request);
+  if (denied) return denied;
+
   const params = request.nextUrl.searchParams;
   const id = params.get("id");
   const ts = params.get("ts");
 
-  if (!id || !validateSpecId(id) || !ts) {
-    return NextResponse.json(
-      { error: "Missing or invalid id/ts" },
-      { status: 400 }
-    );
+  if (!id || !validateDataId(id) || !ts) {
+    return invalidIdResponse();
   }
 
   try {

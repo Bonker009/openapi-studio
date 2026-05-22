@@ -1,8 +1,23 @@
 "use server";
+
+import { assertSafeOutboundUrl, SsrfError } from "@/lib/security/ssrf-server";
+
 export async function fetchApiSpecFromUrl(
   apiUrl: string
 ): Promise<{ spec: string; name: string }> {
-  const response = await fetch(apiUrl);
+  let safeUrl: URL;
+  try {
+    safeUrl = await assertSafeOutboundUrl(apiUrl);
+  } catch (e) {
+    const message = e instanceof SsrfError ? e.message : "URL not allowed";
+    throw new Error(message);
+  }
+
+  const response = await fetch(safeUrl.toString(), { redirect: "manual" });
+
+  if (response.status >= 300 && response.status < 400) {
+    throw new Error("Redirects are not allowed when fetching OpenAPI specs");
+  }
 
   if (!response.ok) {
     console.error(response.status, response.statusText);
@@ -10,7 +25,6 @@ export async function fetchApiSpecFromUrl(
       `Failed to fetch API spec: ${response.status} ${response.statusText}`
     );
   }
-  console.log("Response:", response);
   const data = await response.json();
   const spec = JSON.stringify(data, null, 2);
 

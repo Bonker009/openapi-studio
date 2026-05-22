@@ -1,6 +1,5 @@
 import { type NextRequest, NextResponse } from "next/server";
 import {
-  validateSpecId,
   saveSpecVersion,
   deleteSpecFully,
   getSpec,
@@ -11,8 +10,17 @@ import {
   saveSpecSettings,
   deleteSpecSettings,
 } from "@/lib/spec-versioning";
+import {
+  assertPayloadSize,
+  guardDataRoute,
+  invalidIdResponse,
+  validateDataId,
+} from "@/lib/security/data-api";
 
 export async function GET(request: NextRequest) {
+  const denied = guardDataRoute(request);
+  if (denied) return denied;
+
   const searchParams = request.nextUrl.searchParams;
   const type = searchParams.get("type");
   const id = searchParams.get("id") || "default";
@@ -24,8 +32,8 @@ export async function GET(request: NextRequest) {
     );
   }
 
-  if (type === "spec" && !validateSpecId(id)) {
-    return NextResponse.json({ error: "Invalid id" }, { status: 400 });
+  if (!validateDataId(id)) {
+    return invalidIdResponse();
   }
 
   try {
@@ -64,6 +72,9 @@ export async function GET(request: NextRequest) {
 }
 
 export async function POST(request: NextRequest) {
+  const denied = guardDataRoute(request);
+  if (denied) return denied;
+
   try {
     const body = await request.json();
     const { type, id = "default", data, meta } = body;
@@ -75,11 +86,15 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    if (!validateDataId(id)) {
+      return invalidIdResponse();
+    }
+
+    const tooLarge = assertPayloadSize(data);
+    if (tooLarge) return tooLarge;
+
     switch (type) {
       case "spec": {
-        if (!validateSpecId(id)) {
-          return NextResponse.json({ error: "Invalid id" }, { status: 400 });
-        }
         const ts = saveSpecVersion(id, data, meta);
         return NextResponse.json({ success: true, ts });
       }
@@ -104,6 +119,9 @@ export async function POST(request: NextRequest) {
 }
 
 export async function DELETE(request: NextRequest) {
+  const denied = guardDataRoute(request);
+  if (denied) return denied;
+
   const searchParams = request.nextUrl.searchParams;
   const type = searchParams.get("type");
   const id = searchParams.get("id") || "default";
@@ -115,12 +133,13 @@ export async function DELETE(request: NextRequest) {
     );
   }
 
+  if (!validateDataId(id)) {
+    return invalidIdResponse();
+  }
+
   try {
     switch (type) {
       case "spec": {
-        if (!validateSpecId(id)) {
-          return NextResponse.json({ error: "Invalid id" }, { status: 400 });
-        }
         deleteSpecFully(id);
         return NextResponse.json({ success: true });
       }

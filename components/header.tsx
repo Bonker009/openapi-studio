@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { Button } from "@/components/ui/button";
-import { ArrowLeft, Home, History, Upload } from "lucide-react";
+import { ArrowLeft, Home, History, Upload, Zap } from "lucide-react";
 
 type HeaderProps = {
   title: string;
@@ -26,7 +26,9 @@ export function Header({
 }: HeaderProps) {
   const pathname = usePathname();
   const onDocsPage =
-    specId && pathname.startsWith(`/documentation/${specId}`);
+    specId &&
+    pathname.startsWith(`/documentation/${specId}`) &&
+    !pathname.includes("/playground");
 
   return (
     <header className="sticky top-0 z-20 bg-card border-b border-border shadow-sm">
@@ -88,6 +90,12 @@ export function Header({
                   </Link>
                 </Button>
               )}
+              <Button variant="outline" size="sm" className="gap-2" asChild>
+                <Link href={`/documentation/${specId}/playground`}>
+                  <Zap className="h-4 w-4" />
+                  Playground
+                </Link>
+              </Button>
               <Button variant="outline" size="sm" className="gap-2" asChild>
                 <Link href={`/upload?spec=${specId}`}>
                   <Upload className="h-4 w-4" />

@@ -1,4 +1,6 @@
-import { NextResponse } from "next/server";
+import { type NextRequest, NextResponse } from "next/server";
+import { checkRouteAuth } from "@/lib/security/route-auth";
+import { readBodyWithLimit, MAX_PROXY_BODY_BYTES } from "@/lib/security/outbound-headers";
 
 const OLLAMA_HOST = process.env.OLLAMA_HOST || "http://localhost:11434";
 
@@ -155,16 +157,30 @@ Response must be ONE valid JSON array only. No headers, no sections, no explanat
   return unique;
 }
 
-export async function POST(request: Request) {
+export async function POST(request: NextRequest) {
+  const denied = checkRouteAuth(request);
+  if (denied) return denied;
+
+  if (process.env.ENABLE_LLAMA_GENERATE === "false") {
+    return NextResponse.json({ error: "LLM generation is disabled" }, { status: 403 });
+  }
+
   try {
     const body = await request.json();
     const { requestBody, history } = body;
 
-    if (!requestBody) {
+    if (!requestBody || typeof requestBody !== "string") {
       return NextResponse.json(
         { error: "Request body is required" },
         { status: 400 }
       );
+    }
+
+    try {
+      readBodyWithLimit(requestBody, MAX_PROXY_BODY_BYTES);
+    } catch (e) {
+      const message = e instanceof Error ? e.message : "Request body too large";
+      return NextResponse.json({ error: message }, { status: 413 });
     }
 
     const testCases = await generateTestCases(requestBody, history || []);

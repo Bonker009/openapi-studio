@@ -1,7 +1,11 @@
 import { type NextRequest, NextResponse } from "next/server";
 import { listSpecSummaries } from "@/lib/spec-versioning";
+import { guardDataRoute } from "@/lib/security/data-api";
 
 export async function GET(request: NextRequest) {
+  const denied = guardDataRoute(request);
+  if (denied) return denied;
+
   const searchParams = request.nextUrl.searchParams;
   const type = searchParams.get("type");
 

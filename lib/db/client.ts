@@ -14,7 +14,7 @@ let dbInstance: ReturnType<typeof drizzle<typeof schema>> | null = null;
 function ensureDataDir(): void {
   try {
     if (!fs.existsSync(DATA_DIR)) {
-      fs.mkdirSync(DATA_DIR, { recursive: true, mode: 0o777 });
+      fs.mkdirSync(DATA_DIR, { recursive: true, mode: 0o750 });
     }
     fs.accessSync(DATA_DIR, fs.constants.R_OK | fs.constants.W_OK);
   } catch (error) {
