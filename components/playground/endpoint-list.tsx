@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Lock, Search } from "lucide-react";
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import {
   Tooltip,
   TooltipContent,
@@ -70,7 +71,11 @@ export function EndpointList({
       <div className="sticky top-0 z-10 bg-card border-b border-border px-4 py-3 shrink-0">
         <div className="relative">
           <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+          <Label htmlFor="endpoint-list-search" className="sr-only">
+            Filter endpoints
+          </Label>
           <Input
+            id="endpoint-list-search"
             ref={searchRef}
             placeholder="Filter by tag, path, or summary… (/ to focus)"
             value={search}
@@ -81,6 +86,7 @@ export function EndpointList({
       </div>
 
       <div className="flex-1 overflow-y-auto">
+        <h2 className="sr-only">Endpoints</h2>
         {filtered.length === 0 ? (
           <p className="text-sm text-muted-foreground py-8 text-center px-4">
             No endpoints match your filter
@@ -108,6 +114,8 @@ export function EndpointList({
                       <button
                         type="button"
                         onClick={() => onSelect(ep)}
+                        aria-current={isSelected ? "true" : undefined}
+                        aria-label={`${ep.method} ${ep.path}${ep.requiresAuth ? ", requires authentication" : ""}`}
                         className={cn(
                           "w-full flex items-start gap-3 px-4 py-2.5 text-left transition-colors rounded-none border-l-2 border-transparent",
                           isSelected

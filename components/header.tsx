@@ -59,9 +59,9 @@ export function Header({
                 {eyebrow}
               </p>
             )}
-            <h1 className="text-lg sm:text-xl font-semibold tracking-tight text-foreground truncate">
+            <p className="text-lg sm:text-xl font-semibold tracking-tight text-foreground truncate">
               {title}
-            </h1>
+            </p>
             {description && (
               <p className="text-sm text-muted-foreground mt-0.5 line-clamp-1">
                 {description}

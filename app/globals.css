@@ -25,6 +25,23 @@
   --color-input: var(--input);
   --color-border: var(--border);
   --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-success: var(--success);
+  --color-success-foreground: var(--success-foreground);
+  --color-warning: var(--warning);
+  --color-warning-foreground: var(--warning-foreground);
+  --color-info: var(--info);
+  --color-info-foreground: var(--info-foreground);
+  --color-method-get: var(--method-get);
+  --color-method-get-foreground: var(--method-get-foreground);
+  --color-method-post: var(--method-post);
+  --color-method-post-foreground: var(--method-post-foreground);
+  --color-method-put: var(--method-put);
+  --color-method-put-foreground: var(--method-put-foreground);
+  --color-method-patch: var(--method-patch);
+  --color-method-patch-foreground: var(--method-patch-foreground);
+  --color-method-delete: var(--method-delete);
+  --color-method-delete-foreground: var(--method-delete-foreground);
   --color-accent-foreground: var(--accent-foreground);
   --color-accent: var(--accent);
   --color-brand-accent: var(--brand-accent);
@@ -65,6 +82,22 @@
   --brand-accent: #ea1d24;
   --destructive: #dc2626;
   --destructive-foreground: #ffffff;
+  --success: #0d9488;
+  --success-foreground: #ffffff;
+  --warning: #d97706;
+  --warning-foreground: #ffffff;
+  --info: #2563eb;
+  --info-foreground: #ffffff;
+  --method-get: #0ea5e9;
+  --method-get-foreground: #0c4a6e;
+  --method-post: #0d9488;
+  --method-post-foreground: #134e4a;
+  --method-put: #d97706;
+  --method-put-foreground: #78350f;
+  --method-patch: #7c3aed;
+  --method-patch-foreground: #4c1d95;
+  --method-delete: #dc2626;
+  --method-delete-foreground: #7f1d1d;
   --border: #e2e8f0;
   --input: #e2e8f0;
   --ring: #00518d66;
@@ -99,6 +132,23 @@
   --accent: oklch(0.279 0.041 260.031);
   --accent-foreground: oklch(0.984 0.003 247.858);
   --destructive: oklch(0.704 0.191 22.216);
+  --destructive-foreground: oklch(0.984 0.003 247.858);
+  --success: oklch(0.696 0.17 162.48);
+  --success-foreground: oklch(0.984 0.003 247.858);
+  --warning: oklch(0.769 0.188 70.08);
+  --warning-foreground: oklch(0.984 0.003 247.858);
+  --info: oklch(0.488 0.243 264.376);
+  --info-foreground: oklch(0.984 0.003 247.858);
+  --method-get: oklch(0.488 0.243 264.376);
+  --method-get-foreground: oklch(0.984 0.003 247.858);
+  --method-post: oklch(0.696 0.17 162.48);
+  --method-post-foreground: oklch(0.984 0.003 247.858);
+  --method-put: oklch(0.769 0.188 70.08);
+  --method-put-foreground: oklch(0.984 0.003 247.858);
+  --method-patch: oklch(0.627 0.265 303.9);
+  --method-patch-foreground: oklch(0.984 0.003 247.858);
+  --method-delete: oklch(0.704 0.191 22.216);
+  --method-delete-foreground: oklch(0.984 0.003 247.858);
   --border: oklch(1 0 0 / 10%);
   --input: oklch(1 0 0 / 15%);
   --ring: oklch(0.551 0.027 264.364);
@@ -129,5 +179,16 @@
 @layer utilities {
   .tabular-nums {
     font-variant-numeric: tabular-nums;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
   }
 }

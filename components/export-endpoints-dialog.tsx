@@ -237,14 +237,17 @@ export function ExportEndpointsDialog({
       notes: ep.notes,
     }));
 
+    const toastId = toast.loading("Preparing Excel export…");
     try {
       await downloadExcel(fileName, rows, exportColumns);
       toast.success("Excel file downloaded", {
+        id: toastId,
         description: `${filteredEndpoints.length} endpoints exported`,
       });
       onOpenChange(false);
     } catch {
       toast.error("Export failed", {
+        id: toastId,
         description: "Could not generate the Excel file. Try again.",
       });
     }

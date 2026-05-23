@@ -2,11 +2,11 @@ import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 
 const methodStyles: Record<string, string> = {
-  GET: "bg-primary/10 text-primary border-primary/20",
-  POST: "bg-teal-100 text-teal-800 border-teal-200",
-  PUT: "bg-amber-100 text-amber-800 border-amber-200",
-  PATCH: "bg-violet-100 text-violet-800 border-violet-200",
-  DELETE: "bg-destructive/10 text-destructive border-destructive/20",
+  GET: "bg-method-get/15 text-method-get-foreground border-method-get/30",
+  POST: "bg-method-post/15 text-method-post-foreground border-method-post/30",
+  PUT: "bg-method-put/15 text-method-put-foreground border-method-put/30",
+  PATCH: "bg-method-patch/15 text-method-patch-foreground border-method-patch/30",
+  DELETE: "bg-method-delete/15 text-method-delete-foreground border-method-delete/30",
 };
 
 export function MethodBadge({

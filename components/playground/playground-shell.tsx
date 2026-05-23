@@ -8,6 +8,7 @@ import {
   extractPlaygroundEndpoints,
   type PlaygroundEndpoint,
 } from "@/lib/playground/endpoints";
+import type { Credential } from "@/lib/playground/credentials";
 
 type PlaygroundShellProps = {
   specId: string;
@@ -19,6 +20,7 @@ type PlaygroundShellProps = {
     servers?: { url: string; description?: string }[];
     security?: unknown[];
   };
+  workingPaths?: Set<string>;
 };
 
 export function PlaygroundShell({
@@ -26,13 +28,15 @@ export function PlaygroundShell({
   specTitle,
   specVersion,
   apiData,
+  workingPaths,
 }: PlaygroundShellProps) {
   const [baseUrl, setBaseUrl] = useState(
     apiData.servers?.[0]?.url?.replace(/\/$/, "") ?? "http://localhost:8080"
   );
   const [selected, setSelected] = useState<PlaygroundEndpoint | null>(null);
-  const [activeTokenName, setActiveTokenName] = useState<string | null>(null);
-  const [activeTokenValue, setActiveTokenValue] = useState<string | null>(null);
+  const [activeCredential, setActiveCredential] = useState<Credential | null>(
+    null
+  );
 
   const endpoints = useMemo(
     () =>
@@ -75,15 +79,14 @@ export function PlaygroundShell({
         specServers={apiData.servers}
         baseUrl={baseUrl}
         onBaseUrlChange={setBaseUrl}
-        activeTokenName={activeTokenName}
-        activeTokenValue={activeTokenValue}
-        onActiveTokenChange={(name, value) => {
-          setActiveTokenName(name);
-          setActiveTokenValue(value);
-        }}
+        activeCredential={activeCredential}
+        onActiveCredentialChange={setActiveCredential}
+        endpoints={endpoints}
+        apiData={apiData}
+        workingPaths={workingPaths}
       />
 
-      <div className="flex flex-1 min-h-0 overflow-hidden">
+      <main id="main-content" className="flex flex-1 min-h-0 overflow-hidden">
         <div className="w-1/2 min-w-0 shrink-0 border-r border-border bg-card flex flex-col min-h-0">
           <EndpointList
             endpoints={endpoints}
@@ -91,18 +94,17 @@ export function PlaygroundShell({
             onSelect={setSelected}
           />
         </div>
-        <div className="w-1/2 min-w-0 min-h-0 overflow-hidden bg-white flex flex-col">
+        <div className="w-1/2 min-w-0 min-h-0 overflow-hidden bg-card flex flex-col">
           <TryItPanel
             endpoint={selected}
             apiData={apiData}
             baseUrl={baseUrl}
-            activeTokenName={activeTokenName}
-            activeTokenValue={activeTokenValue}
+            activeCredential={activeCredential}
             totalEndpoints={endpoints.length}
             onSelectFirst={selectFirst}
           />
         </div>
-      </div>
+      </main>
     </>
   );
 }

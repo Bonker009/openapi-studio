@@ -18,6 +18,7 @@ import {
   type MarkdownSaveStatus,
 } from "./markdown-editor";
 import { MarkdownHelpModal } from "./markdown-help-modal";
+import { EndpointChangelog } from "@/components/endpoint-changelog";
 import {
   Accordion,
   AccordionContent,
@@ -52,6 +53,7 @@ function ModalTabPanel({ children }: { children: ReactNode }) {
 }
 
 type EndpointDetailModalProps = {
+  specId: string;
   isOpen: boolean;
   onClose: () => void;
   endpoint: any;
@@ -68,6 +70,7 @@ type EndpointDetailModalProps = {
 };
 
 export function EndpointDetailModal({
+  specId,
   isOpen,
   onClose,
   endpoint,
@@ -225,10 +228,10 @@ export function EndpointDetailModal({
   };
 
   const responseCodeVariant = (code: string) => {
-    if (code.startsWith("2")) return "bg-teal-100 text-teal-800 border-teal-200";
+    if (code.startsWith("2")) return "bg-success/10 text-success border-success/30";
     if (code.startsWith("4"))
       return "bg-destructive/10 text-destructive border-destructive/20";
-    if (code.startsWith("5")) return "bg-amber-100 text-amber-800 border-amber-200";
+    if (code.startsWith("5")) return "bg-warning/10 text-warning border-warning/30";
     return "bg-primary/10 text-primary border-primary/20";
   };
 
@@ -244,16 +247,13 @@ export function EndpointDetailModal({
         className="flex h-full max-h-[100dvh] flex-col gap-0 overflow-hidden p-0 w-full sm:max-w-none sm:w-[min(95vw,1100px)]"
       >
         <SheetHeader className="shrink-0 border-b px-6 py-4 space-y-3 text-left">
-          <SheetTitle className="sr-only">
-            {method} {path}
+          <SheetTitle className="flex flex-wrap items-center gap-2 text-left text-base sm:text-lg font-semibold">
+            <MethodBadge method={method} className="text-xs" />
+            <span className="font-mono font-medium break-all">{path}</span>
           </SheetTitle>
           <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
             <div className="min-w-0 flex-1 space-y-2 pr-8">
               <div className="flex flex-wrap items-center gap-2">
-                <MethodBadge method={method} className="text-xs" />
-                <code className="text-base sm:text-lg font-mono font-medium break-all">
-                  {path}
-                </code>
                 <Button
                   type="button"
                   variant="outline"
@@ -540,14 +540,14 @@ export function EndpointDetailModal({
             <ModalTabPanel>
               <div className="space-y-6">
                 <div>
-                  <h4 className="font-medium mb-2 flex flex-wrap items-center gap-2">
+                  <h3 className="font-medium mb-2 flex flex-wrap items-center gap-2">
                     <span>Request schema</span>
                     {schemaRefLabel(requestBodySchema) && (
                       <Badge variant="outline" className="font-mono font-normal">
                         {schemaRefLabel(requestBodySchema)}
                       </Badge>
                     )}
-                  </h4>
+                  </h3>
                   {resolvedRequestSchema ? (
                     <CodeBlock
                       code={JSON.stringify(resolvedRequestSchema, null, 2)}
@@ -561,14 +561,14 @@ export function EndpointDetailModal({
                 </div>
                 <Separator />
                 <div>
-                  <h4 className="font-medium mb-2 flex flex-wrap items-center gap-2">
+                  <h3 className="font-medium mb-2 flex flex-wrap items-center gap-2">
                     <span>Response schema</span>
                     {schemaRefLabel(responseBodySchema) && (
                       <Badge variant="outline" className="font-mono font-normal">
                         {schemaRefLabel(responseBodySchema)}
                       </Badge>
                     )}
-                  </h4>
+                  </h3>
                   {resolvedResponseSchema ? (
                     <CodeBlock
                       code={JSON.stringify(resolvedResponseSchema, null, 2)}
@@ -588,7 +588,7 @@ export function EndpointDetailModal({
             <ModalTabPanel>
               <div className="space-y-6">
                 <div>
-                  <h4 className="font-medium mb-2">Sample request body</h4>
+                  <h3 className="font-medium mb-2">Sample request body</h3>
                   {requestSample ? (
                     <CodeBlock
                       code={JSON.stringify(requestSample, null, 2)}
@@ -604,7 +604,7 @@ export function EndpointDetailModal({
                     <Separator />
                     <div>
                       <div className="flex items-center justify-between mb-2">
-                        <h4 className="font-medium">Sample request URL</h4>
+                        <h3 className="font-medium">Sample request URL</h3>
                         <Button
                           type="button"
                           variant="outline"
@@ -633,7 +633,7 @@ export function EndpointDetailModal({
             <ModalTabPanel>
               <div className="space-y-6">
                 <div>
-                  <h4 className="font-medium mb-2">Sample response (200 OK)</h4>
+                  <h3 className="font-medium mb-2">Sample response (200 OK)</h3>
                   {responseSample ? (
                     <CodeBlock
                       code={JSON.stringify(responseSample, null, 2)}
@@ -649,7 +649,7 @@ export function EndpointDetailModal({
                   <>
                     <Separator />
                     <div>
-                      <h4 className="font-medium mb-2">Other response codes</h4>
+                      <h3 className="font-medium mb-2">Other response codes</h3>
                       <Accordion type="single" collapsible className="w-full">
                         {Object.entries(methodData.responses)
                           .filter(([code]) => code !== "200")
@@ -695,7 +695,7 @@ export function EndpointDetailModal({
                     <>
                       <Separator />
                       <div>
-                        <h4 className="font-medium mb-2">Response structure</h4>
+                        <h3 className="font-medium mb-2">Response structure</h3>
                         <ul className="space-y-2 rounded-md border bg-muted/30 p-4">
                           {Object.entries(responseSample).map(
                             ([key, value]) => (
@@ -732,7 +732,7 @@ export function EndpointDetailModal({
             <ModalTabPanel>
               <div className="flex items-center justify-between mb-3">
                 <div>
-                  <h4 className="font-medium">Notes</h4>
+                  <h3 className="font-medium">Notes</h3>
                   <p className="text-xs text-muted-foreground mt-0.5">
                     Markdown supported. Auto-saved.
                   </p>
@@ -749,7 +749,13 @@ export function EndpointDetailModal({
                     ? "Add notes about this endpoint using Markdown...\n\n## Usage\n\n## Examples\n\n## Notes"
                     : "Add comments about why this endpoint is not working using Markdown...\n\n## Issues\n\n## Workarounds\n\n## Todo"
                 }
-                height="min-h-[360px]"
+                height="min-h-[280px]"
+              />
+              <EndpointChangelog
+                specId={specId}
+                path={path}
+                method={method}
+                isOpen={isOpen}
               />
             </ModalTabPanel>
           </TabsContent>

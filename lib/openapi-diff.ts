@@ -1,4 +1,11 @@
-export type EndpointRef = { path: string; method: string; tag?: string };
+export type Severity = "breaking" | "non-breaking" | "additive";
+
+export type EndpointRef = {
+  path: string;
+  method: string;
+  tag?: string;
+  severity: Severity;
+};
 
 export type ChangeReason =
   | "params"
@@ -17,6 +24,7 @@ export type EndpointChange = {
   method: string;
   tag?: string;
   reasons: ChangeReason[];
+  severity: Severity;
   details: {
     params?: FieldDelta<ParamDelta>;
     requestBody?: { added: string[]; removed: string[]; changed: string[] };
@@ -33,6 +41,13 @@ export type MovedEndpoint = {
   to: string;
   tag?: string;
   reason: "versionedPath";
+  severity: Severity;
+};
+
+export type SeverityCounts = {
+  breaking: number;
+  nonBreaking: number;
+  additive: number;
 };
 
 export type DiffSummary = {
@@ -42,9 +57,12 @@ export type DiffSummary = {
   moved: MovedEndpoint[];
   infoChanged: boolean;
   suggestedBump: "major" | "minor" | "patch";
+  worstSeverity: Severity;
+  severityCounts: SeverityCounts;
 };
 
 export type DiffKind = "added" | "removed" | "changed" | "moved";
+export type SeverityFilter = Severity | "all";
 
 type OpenApiDoc = {
   info?: Record<string, unknown>;
@@ -63,6 +81,18 @@ const HTTP_METHODS = [
 ] as const;
 
 const VERSION_SEGMENT = /\/v\d+(?:\.\d+)?(?=\/|$)/i;
+
+const SEVERITY_RANK: Record<Severity, number> = {
+  breaking: 3,
+  "non-breaking": 2,
+  additive: 1,
+};
+
+function maxSeverity(...levels: Severity[]): Severity {
+  return levels.reduce((best, s) =>
+    SEVERITY_RANK[s] > SEVERITY_RANK[best] ? s : best
+  );
+}
 
 function stableStringify(value: unknown): string {
   return JSON.stringify(value ?? null);
@@ -120,6 +150,10 @@ function diffStringArray(oldArr: string[], newArr: string[]): FieldDelta<string>
   return { added, removed, changed };
 }
 
+function paramKey(p: Record<string, unknown>): string {
+  return `${String(p.in ?? "query")}:${String(p.name ?? "")}`;
+}
+
 function diffParams(
   oldParams: unknown,
   newParams: unknown
@@ -127,17 +161,16 @@ function diffParams(
   const oldList = Array.isArray(oldParams) ? oldParams : [];
   const newList = Array.isArray(newParams) ? newParams : [];
 
-  const keyOf = (p: Record<string, unknown>) =>
-    `${String(p.in ?? "query")}:${String(p.name ?? "")}`;
-
   const oldMap = new Map<string, Record<string, unknown>>();
   const newMap = new Map<string, Record<string, unknown>>();
 
   for (const p of oldList) {
-    if (p && typeof p === "object") oldMap.set(keyOf(p as Record<string, unknown>), p as Record<string, unknown>);
+    if (p && typeof p === "object")
+      oldMap.set(paramKey(p as Record<string, unknown>), p as Record<string, unknown>);
   }
   for (const p of newList) {
-    if (p && typeof p === "object") newMap.set(keyOf(p as Record<string, unknown>), p as Record<string, unknown>);
+    if (p && typeof p === "object")
+      newMap.set(paramKey(p as Record<string, unknown>), p as Record<string, unknown>);
   }
 
   const added: ParamDelta[] = [];
@@ -250,10 +283,304 @@ function diffResponses(
   };
 }
 
+function schemaFromContent(
+  rb: unknown,
+  mediaType: string
+): Record<string, unknown> | null {
+  if (!rb || typeof rb !== "object") return null;
+  const content = (rb as Record<string, unknown>).content as
+    | Record<string, { schema?: unknown }>
+    | undefined;
+  const entry = content?.[mediaType];
+  if (!entry?.schema || typeof entry.schema !== "object") return null;
+  return entry.schema as Record<string, unknown>;
+}
+
+/** Compare JSON Schema shapes for breaking vs additive vs non-breaking changes. */
+export function compareJsonSchemas(
+  oldSchema: unknown,
+  newSchema: unknown
+): Severity {
+  if (oldSchema == null && newSchema == null) return "non-breaking";
+  if (oldSchema == null) return "additive";
+  if (newSchema == null) return "breaking";
+
+  const oldS =
+    typeof oldSchema === "object"
+      ? (oldSchema as Record<string, unknown>)
+      : null;
+  const newS =
+    typeof newSchema === "object"
+      ? (newSchema as Record<string, unknown>)
+      : null;
+  if (!oldS || !newS) {
+    return stableStringify(oldSchema) === stableStringify(newSchema)
+      ? "non-breaking"
+      : "breaking";
+  }
+
+  if (stableStringify(oldS) === stableStringify(newS)) return "non-breaking";
+
+  const oldType = normalizeSchemaType(oldS);
+  const newType = normalizeSchemaType(newS);
+  if (oldType && newType && oldType !== newType) return "breaking";
+
+  const oldEnum = enumValues(oldS);
+  const newEnum = enumValues(newS);
+  if (oldEnum.length > 0 && newEnum.length > 0) {
+    const newSet = new Set(newEnum.map(String));
+    const allOldInNew = oldEnum.every((v) => newSet.has(String(v)));
+    const allNewInOld = newEnum.every((v) => oldEnum.map(String).includes(String(v)));
+    if (!allOldInNew) return "breaking";
+    if (!allNewInOld && allOldInNew) return "additive";
+    if (allNewInOld && allOldInNew) return "non-breaking";
+  }
+
+  const oldReq = requiredFields(oldS);
+  const newReq = requiredFields(newS);
+  for (const f of newReq) {
+    if (!oldReq.includes(f)) return "breaking";
+  }
+  for (const f of oldReq) {
+    if (!newReq.includes(f)) {
+      /* optional in new — non-breaking at schema level */
+    }
+  }
+  if (newReq.length < oldReq.length && oldReq.some((f) => !newReq.includes(f))) {
+    /* at least one field became optional */
+  }
+
+  const oldProps = objectProperties(oldS);
+  const newProps = objectProperties(newS);
+  if (oldProps || newProps) {
+    const oKeys = Object.keys(oldProps ?? {});
+    const nKeys = Object.keys(newProps ?? {});
+    for (const k of oKeys) {
+      if (!nKeys.includes(k)) return "breaking";
+    }
+    let worst: Severity = "non-breaking";
+    for (const k of nKeys) {
+      if (!oKeys.includes(k)) {
+        worst = maxSeverity(worst, "additive");
+        continue;
+      }
+      worst = maxSeverity(
+        worst,
+        compareJsonSchemas(oldProps![k], newProps![k])
+      );
+    }
+    return worst;
+  }
+
+  return "breaking";
+}
+
+function normalizeSchemaType(schema: Record<string, unknown>): string | null {
+  if (typeof schema.type === "string") return schema.type;
+  if (Array.isArray(schema.type)) {
+    return [...schema.type].sort().join("|");
+  }
+  if (schema.oneOf || schema.anyOf) return "union";
+  if (schema.allOf) return "allOf";
+  return null;
+}
+
+function enumValues(schema: Record<string, unknown>): unknown[] {
+  if (Array.isArray(schema.enum)) return schema.enum;
+  return [];
+}
+
+function requiredFields(schema: Record<string, unknown>): string[] {
+  if (!Array.isArray(schema.required)) return [];
+  return schema.required.filter((x): x is string => typeof x === "string");
+}
+
+function objectProperties(
+  schema: Record<string, unknown>
+): Record<string, unknown> | null {
+  const props = schema.properties;
+  if (props && typeof props === "object") {
+    return props as Record<string, unknown>;
+  }
+  return null;
+}
+
+function paramRequired(p: Record<string, unknown>): boolean {
+  return p.required === true;
+}
+
+function paramHasDefault(p: Record<string, unknown>): boolean {
+  const schema = p.schema;
+  if (schema && typeof schema === "object") {
+    return (schema as Record<string, unknown>).default !== undefined;
+  }
+  return false;
+}
+
+function classifyParams(
+  oldOp: Record<string, unknown>,
+  newOp: Record<string, unknown>,
+  params: FieldDelta<ParamDelta>
+): Severity {
+  let worst: Severity = "non-breaking";
+
+  if (params.removed.length > 0) return "breaking";
+
+  const oldList = Array.isArray(oldOp.parameters) ? oldOp.parameters : [];
+  const newList = Array.isArray(newOp.parameters) ? newOp.parameters : [];
+  const oldMap = new Map<string, Record<string, unknown>>();
+  const newMap = new Map<string, Record<string, unknown>>();
+  for (const p of oldList) {
+    if (p && typeof p === "object")
+      oldMap.set(paramKey(p as Record<string, unknown>), p as Record<string, unknown>);
+  }
+  for (const p of newList) {
+    if (p && typeof p === "object")
+      newMap.set(paramKey(p as Record<string, unknown>), p as Record<string, unknown>);
+  }
+
+  for (const added of params.added) {
+    const key = `${added.in}:${added.name}`;
+    const newP = newMap.get(key);
+    if (newP && paramRequired(newP) && !paramHasDefault(newP)) {
+      worst = maxSeverity(worst, "breaking");
+    } else {
+      worst = maxSeverity(worst, "additive");
+    }
+  }
+
+  for (const key of newMap.keys()) {
+    const oldP = oldMap.get(key);
+    const newP = newMap.get(key);
+    if (!oldP || !newP) continue;
+    const wasReq = paramRequired(oldP);
+    const nowReq = paramRequired(newP);
+    if (wasReq && !nowReq) {
+      worst = maxSeverity(worst, "non-breaking");
+    } else if (!wasReq && nowReq) {
+      worst = maxSeverity(worst, "breaking");
+    } else if (stableStringify(oldP) !== stableStringify(newP)) {
+      const schemaOld = oldP.schema;
+      const schemaNew = newP.schema;
+      worst = maxSeverity(
+        worst,
+        compareJsonSchemas(schemaOld, schemaNew)
+      );
+    }
+  }
+
+  return worst;
+}
+
+function classifyRequestBody(
+  oldOp: Record<string, unknown>,
+  newOp: Record<string, unknown>,
+  rb: NonNullable<EndpointChange["details"]["requestBody"]>
+): Severity {
+  let worst: Severity = "non-breaking";
+  if (rb.removed.length > 0) return "breaking";
+  if (rb.added.length > 0) worst = maxSeverity(worst, "additive");
+  for (const mt of rb.changed) {
+    const sev = compareJsonSchemas(
+      schemaFromContent(oldOp.requestBody, mt),
+      schemaFromContent(newOp.requestBody, mt)
+    );
+    worst = maxSeverity(worst, sev);
+  }
+  return worst;
+}
+
+function classifyResponses(
+  oldOp: Record<string, unknown>,
+  newOp: Record<string, unknown>,
+  resp: NonNullable<EndpointChange["details"]["responses"]>
+): Severity {
+  let worst: Severity = "non-breaking";
+  if (resp.removed.length > 0) return "breaking";
+  if (resp.added.length > 0) worst = maxSeverity(worst, "additive");
+
+  const oldObj =
+    oldOp.responses && typeof oldOp.responses === "object"
+      ? (oldOp.responses as Record<string, unknown>)
+      : {};
+  const newObj =
+    newOp.responses && typeof newOp.responses === "object"
+      ? (newOp.responses as Record<string, unknown>)
+      : {};
+
+  for (const code of resp.changed) {
+    const oldR = oldObj[code];
+    const newR = newObj[code];
+    const is2xx = code.startsWith("2");
+    const oldContent =
+      oldR && typeof oldR === "object"
+        ? ((oldR as Record<string, unknown>).content as Record<string, unknown> | undefined)
+        : undefined;
+    const newContent =
+      newR && typeof newR === "object"
+        ? ((newR as Record<string, unknown>).content as Record<string, unknown> | undefined)
+        : undefined;
+    const mediaTypes = new Set([
+      ...Object.keys(oldContent ?? {}),
+      ...Object.keys(newContent ?? {}),
+    ]);
+    for (const mt of mediaTypes) {
+      const sev = compareJsonSchemas(
+        oldContent?.[mt] &&
+          typeof oldContent[mt] === "object" &&
+          (oldContent[mt] as { schema?: unknown }).schema,
+        newContent?.[mt] &&
+          typeof newContent[mt] === "object" &&
+          (newContent[mt] as { schema?: unknown }).schema
+      );
+      if (is2xx) {
+        worst = maxSeverity(worst, sev === "additive" ? "non-breaking" : sev);
+      } else {
+        worst = maxSeverity(worst, sev);
+      }
+    }
+    if (mediaTypes.size === 0 && stableStringify(oldR) !== stableStringify(newR)) {
+      worst = maxSeverity(worst, "breaking");
+    }
+  }
+  return worst;
+}
+
+export function classifyChange(
+  oldOp: Record<string, unknown>,
+  newOp: Record<string, unknown>,
+  reasons: ChangeReason[],
+  details: EndpointChange["details"]
+): Severity {
+  const severities: Severity[] = [];
+
+  if (details.params) {
+    severities.push(classifyParams(oldOp, newOp, details.params));
+  }
+  if (details.requestBody) {
+    severities.push(classifyRequestBody(oldOp, newOp, details.requestBody));
+  }
+  if (details.responses) {
+    severities.push(classifyResponses(oldOp, newOp, details.responses));
+  }
+  if (details.operationId) severities.push("non-breaking");
+  if (details.tags) severities.push("non-breaking");
+  if (details.summary) severities.push("non-breaking");
+
+  if (severities.length === 0) {
+    return reasons.length > 0 ? "non-breaking" : "non-breaking";
+  }
+  return maxSeverity(...severities);
+}
+
 function buildChangeDetails(
   oldOp: Record<string, unknown>,
   newOp: Record<string, unknown>
-): { reasons: ChangeReason[]; details: EndpointChange["details"] } {
+): {
+  reasons: ChangeReason[];
+  details: EndpointChange["details"];
+  severity: Severity;
+} {
   const reasons: ChangeReason[] = [];
   const details: EndpointChange["details"] = {};
 
@@ -308,13 +635,18 @@ function buildChangeDetails(
     details.summary = { from: oldSummary, to: newSummary };
   }
 
-  return { reasons, details };
+  const severity = classifyChange(oldOp, newOp, reasons, details);
+  return { reasons, details, severity };
 }
 
 function detectMoved(
   added: EndpointRef[],
   removed: EndpointRef[]
-): { moved: MovedEndpoint[]; addedOut: EndpointRef[]; removedOut: EndpointRef[] } {
+): {
+  moved: MovedEndpoint[];
+  addedOut: EndpointRef[];
+  removedOut: EndpointRef[];
+} {
   const moved: MovedEndpoint[] = [];
   const usedAdded = new Set<number>();
   const usedRemoved = new Set<number>();
@@ -336,6 +668,7 @@ function detectMoved(
           to: a.path,
           tag: a.tag ?? r.tag,
           reason: "versionedPath",
+          severity: "breaking",
         });
         usedAdded.add(ai);
         usedRemoved.add(ri);
@@ -351,10 +684,88 @@ function detectMoved(
   };
 }
 
-export function diffOpenApi(
-  oldDoc: OpenApiDoc,
-  newDoc: OpenApiDoc
-): DiffSummary {
+function computeSeverityCounts(summary: Omit<DiffSummary, "worstSeverity" | "severityCounts">): {
+  worstSeverity: Severity;
+  severityCounts: SeverityCounts;
+} {
+  const severityCounts: SeverityCounts = {
+    breaking: 0,
+    nonBreaking: 0,
+    additive: 0,
+  };
+
+  const bump = (s: Severity) => {
+    if (s === "breaking") severityCounts.breaking++;
+    else if (s === "additive") severityCounts.additive++;
+    else severityCounts.nonBreaking++;
+  };
+
+  for (const e of summary.added) bump(e.severity);
+  for (const e of summary.removed) bump(e.severity);
+  for (const e of summary.changed) bump(e.severity);
+  for (const e of summary.moved) bump(e.severity);
+
+  let worstSeverity: Severity = "additive";
+  if (severityCounts.breaking > 0) worstSeverity = "breaking";
+  else if (severityCounts.nonBreaking > 0) worstSeverity = "non-breaking";
+
+  return { worstSeverity, severityCounts };
+}
+
+function inferChangedSeverity(
+  reasons: ChangeReason[],
+  details: EndpointChange["details"]
+): Severity {
+  if (details.params?.removed.length) return "breaking";
+  if (details.responses?.removed.length) return "breaking";
+  if (details.requestBody?.removed.length) return "breaking";
+  if (
+    reasons.includes("requestBody") ||
+    reasons.includes("responses")
+  ) {
+    return "breaking";
+  }
+  if (reasons.every((r) => r === "operationId" || r === "tags" || r === "summary")) {
+    return "non-breaking";
+  }
+  return "non-breaking";
+}
+
+function backfillSummarySeverity(summary: DiffSummary): DiffSummary {
+  const added = summary.added.map((e) => ({
+    ...e,
+    severity: e.severity ?? "additive",
+  }));
+  const removed = summary.removed.map((e) => ({
+    ...e,
+    severity: e.severity ?? "breaking",
+  }));
+  const changed = summary.changed.map((c) => ({
+    ...c,
+    severity: c.severity ?? inferChangedSeverity(c.reasons, c.details),
+  }));
+  const moved = summary.moved.map((m) => ({
+    ...m,
+    severity: m.severity ?? "breaking",
+  }));
+
+  const base = { ...summary, added, removed, changed, moved };
+  const { worstSeverity, severityCounts } = computeSeverityCounts(base);
+
+  let suggestedBump = summary.suggestedBump;
+  if (worstSeverity === "breaking") {
+    suggestedBump = "major";
+  }
+
+  return {
+    ...base,
+    worstSeverity,
+    severityCounts,
+    suggestedBump,
+  };
+}
+
+export function diffOpenApi(oldDoc: OpenApiDoc, newDoc: OpenApiDoc): DiffSummary {
   const oldEndpoints = collectEndpoints(oldDoc);
   const newEndpoints = collectEndpoints(newDoc);
 
@@ -366,10 +777,15 @@ export function diffOpenApi(
     const oldOp = oldEndpoints.get(key);
     if (!oldOp) {
       const { method, path } = parseKey(key);
-      added.push({ method, path, tag: firstTag(newOp) });
+      added.push({
+        method,
+        path,
+        tag: firstTag(newOp),
+        severity: "additive",
+      });
       continue;
     }
-    const { reasons, details } = buildChangeDetails(oldOp, newOp);
+    const { reasons, details, severity } = buildChangeDetails(oldOp, newOp);
     if (reasons.length > 0) {
       const { method, path } = parseKey(key);
       changed.push({
@@ -378,6 +794,7 @@ export function diffOpenApi(
         tag: firstTag(newOp) ?? firstTag(oldOp),
         reasons,
         details,
+        severity,
       });
     }
   }
@@ -386,7 +803,12 @@ export function diffOpenApi(
     if (!newEndpoints.has(key)) {
       const { method, path } = parseKey(key);
       const oldOp = oldEndpoints.get(key)!;
-      removed.push({ method, path, tag: firstTag(oldOp) });
+      removed.push({
+        method,
+        path,
+        tag: firstTag(oldOp),
+        severity: "breaking",
+      });
     }
   }
 
@@ -397,36 +819,35 @@ export function diffOpenApi(
   const infoChanged =
     stableStringify(oldDoc.info) !== stableStringify(newDoc.info);
 
+  const partial = {
+    added,
+    removed,
+    changed,
+    moved,
+    infoChanged,
+    suggestedBump: "patch" as const,
+  };
+
+  const { worstSeverity, severityCounts } = computeSeverityCounts(partial);
+
   let suggestedBump: DiffSummary["suggestedBump"] = "patch";
-
-  const hasMajor =
-    removed.length > 0 ||
-    changed.some((c) =>
-      c.reasons.some((r) => r === "requestBody" || r === "responses")
-    );
-
-  const hasMinor =
-    added.length > 0 || moved.length > 0;
-
-  if (hasMajor) {
+  if (worstSeverity === "breaking") {
     suggestedBump = "major";
-  } else if (hasMinor) {
+  } else if (added.length > 0 || moved.length > 0) {
     suggestedBump = "minor";
   } else if (changed.length > 0 || infoChanged) {
     suggestedBump = "patch";
   }
 
   return {
-    added,
-    removed,
-    changed,
-    moved,
-    infoChanged,
+    ...partial,
     suggestedBump,
+    worstSeverity,
+    severityCounts,
   };
 }
 
-/** Normalize legacy summaries stored before moved/details existed. */
+/** Normalize legacy summaries stored before moved/details/severity existed. */
 export function normalizeDiffSummary(raw: unknown): DiffSummary {
   if (!raw || typeof raw !== "object") {
     return emptyDiffSummary();
@@ -435,25 +856,68 @@ export function normalizeDiffSummary(raw: unknown): DiffSummary {
   const changedRaw = Array.isArray(s.changed) ? s.changed : [];
   const changed: EndpointChange[] = changedRaw.map((c) => {
     const item = c as Record<string, unknown>;
+    const reasons = Array.isArray(item.reasons)
+      ? (item.reasons as ChangeReason[])
+      : [];
+    const details =
+      item.details && typeof item.details === "object"
+        ? (item.details as EndpointChange["details"])
+        : {};
     return {
       path: String(item.path ?? ""),
       method: String(item.method ?? ""),
       tag: item.tag != null ? String(item.tag) : undefined,
-      reasons: Array.isArray(item.reasons)
-        ? (item.reasons as ChangeReason[])
-        : [],
-      details:
-        item.details && typeof item.details === "object"
-          ? (item.details as EndpointChange["details"])
-          : {},
+      reasons,
+      details,
+      severity:
+        item.severity === "breaking" ||
+        item.severity === "non-breaking" ||
+        item.severity === "additive"
+          ? (item.severity as Severity)
+          : inferChangedSeverity(reasons, details),
     };
   });
 
-  return {
-    added: Array.isArray(s.added) ? (s.added as EndpointRef[]) : [],
-    removed: Array.isArray(s.removed) ? (s.removed as EndpointRef[]) : [],
+  const mapRef = (item: unknown, defaultSeverity: Severity): EndpointRef => {
+    const r = item as Record<string, unknown>;
+    const sev = r.severity;
+    return {
+      path: String(r.path ?? ""),
+      method: String(r.method ?? ""),
+      tag: r.tag != null ? String(r.tag) : undefined,
+      severity:
+        sev === "breaking" || sev === "non-breaking" || sev === "additive"
+          ? (sev as Severity)
+          : defaultSeverity,
+    };
+  };
+
+  const summary: DiffSummary = {
+    added: Array.isArray(s.added)
+      ? (s.added as unknown[]).map((x) => mapRef(x, "additive"))
+      : [],
+    removed: Array.isArray(s.removed)
+      ? (s.removed as unknown[]).map((x) => mapRef(x, "breaking"))
+      : [],
     changed,
-    moved: Array.isArray(s.moved) ? (s.moved as MovedEndpoint[]) : [],
+    moved: Array.isArray(s.moved)
+      ? (s.moved as unknown[]).map((m) => {
+          const item = m as Record<string, unknown>;
+          return {
+            method: String(item.method ?? ""),
+            from: String(item.from ?? ""),
+            to: String(item.to ?? ""),
+            tag: item.tag != null ? String(item.tag) : undefined,
+            reason: "versionedPath" as const,
+            severity:
+              item.severity === "breaking" ||
+              item.severity === "non-breaking" ||
+              item.severity === "additive"
+                ? (item.severity as Severity)
+                : "breaking",
+          };
+        })
+      : [],
     infoChanged: Boolean(s.infoChanged),
     suggestedBump:
       s.suggestedBump === "major" ||
@@ -461,7 +925,11 @@ export function normalizeDiffSummary(raw: unknown): DiffSummary {
       s.suggestedBump === "patch"
         ? s.suggestedBump
         : "patch",
+    worstSeverity: "additive",
+    severityCounts: { breaking: 0, nonBreaking: 0, additive: 0 },
   };
+
+  return backfillSummarySeverity(summary);
 }
 
 function emptyDiffSummary(): DiffSummary {
@@ -472,7 +940,18 @@ function emptyDiffSummary(): DiffSummary {
     moved: [],
     infoChanged: false,
     suggestedBump: "patch",
+    worstSeverity: "additive",
+    severityCounts: { breaking: 0, nonBreaking: 0, additive: 0 },
   };
+}
+
+export function formatSeverityCounts(summary: DiffSummary): string {
+  const parts: string[] = [];
+  const { severityCounts: c } = summary;
+  if (c.breaking) parts.push(`${c.breaking} breaking`);
+  if (c.nonBreaking) parts.push(`${c.nonBreaking} non-breaking`);
+  if (c.additive) parts.push(`${c.additive} additive`);
+  return parts.length ? parts.join(" · ") : "";
 }
 
 export function parseVersion(version?: string): [number, number, number] {

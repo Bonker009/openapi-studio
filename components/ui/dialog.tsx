@@ -120,6 +120,7 @@ function DialogFooter({
 
 function DialogTitle({
   className,
+  id: _id,
   ...props
 }: React.ComponentProps<typeof DialogPrimitive.Title>) {
   return (

@@ -11,6 +11,7 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Header } from "@/components/header";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -346,11 +347,15 @@ export default function Home() {
       {dialog}
       <Header title="Poseidon" showBackButton={false} showHomeButton={false} />
 
-      <main className="container mx-auto py-8 px-4 max-w-6xl">
+      <main id="main-content" className="container mx-auto py-8 px-4 max-w-6xl">
         <div className="flex flex-col sm:flex-row gap-3 mb-6">
           <div className="relative flex-1">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+            <Label htmlFor="spec-search" className="sr-only">
+              Search specifications
+            </Label>
             <Input
+              id="spec-search"
               placeholder="Search specifications…"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
@@ -407,7 +412,7 @@ export default function Home() {
         {viewMode === "list" ? (
           <Card className="shadow-sm">
             <CardHeader>
-              <CardTitle>API Documentation</CardTitle>
+              <CardTitle as="h2">API Documentation</CardTitle>
               <CardDescription>
                 View and manage your OpenAPI specifications
               </CardDescription>

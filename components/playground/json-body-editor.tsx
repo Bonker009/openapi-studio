@@ -73,7 +73,7 @@ export function JsonBodyEditor({
   return (
     <div
       className={cn(
-        "rounded-md border border-input overflow-hidden bg-white",
+        "rounded-md border border-input overflow-hidden bg-card",
         className
       )}
     >

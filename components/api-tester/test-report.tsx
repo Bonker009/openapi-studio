@@ -52,10 +52,10 @@ export function TestReport({
       <CardContent>
         {/* Summary Bar */}
         <div className="flex gap-3 mb-4">
-          <Badge className="bg-green-100 text-green-800">
+          <Badge className="bg-success/10 text-success">
             Passed: {passed}
           </Badge>
-          <Badge className="bg-red-100 text-red-800">Failed: {failed}</Badge>
+          <Badge className="bg-destructive/10 text-destructive">Failed: {failed}</Badge>
           <Badge className="bg-gray-100 text-gray-800">Total: {total}</Badge>
         </div>
 
@@ -80,7 +80,7 @@ export function TestReport({
                   {result.response.status}
                 </Badge>
               ) : (
-                <Badge className="bg-red-100 text-red-800 ml-2">Error</Badge>
+                <Badge className="bg-destructive/10 text-destructive ml-2">Error</Badge>
               )}
             </Button>
           ))}
@@ -91,7 +91,7 @@ export function TestReport({
           <div className="space-y-4">
             {/* Test Case Info */}
             {testCase && (
-              <div className="bg-slate-50 border border-slate-200 rounded-md p-4">
+              <div className="bg-muted/40 border border-border rounded-md p-4">
                 <div className="flex items-center justify-between">
                   <h3 className="text-base font-medium flex items-center">
                     <Badge
@@ -100,11 +100,11 @@ export function TestReport({
                         testCase.request.method === "GET"
                           ? "bg-blue-100 text-blue-800"
                           : testCase.request.method === "POST"
-                          ? "bg-green-100 text-green-800"
+                          ? "bg-success/10 text-success"
                           : testCase.request.method === "PUT"
                           ? "bg-yellow-100 text-yellow-800"
                           : testCase.request.method === "DELETE"
-                          ? "bg-red-100 text-red-800"
+                          ? "bg-destructive/10 text-destructive"
                           : "bg-gray-100 text-gray-800"
                       )}
                     >
@@ -131,7 +131,7 @@ export function TestReport({
             {/* Request/Response Side by Side */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               {/* Request */}
-              <div className="bg-slate-50 border border-slate-200 rounded-md p-4">
+              <div className="bg-muted/40 border border-border rounded-md p-4">
                 <div className="font-semibold mb-2 flex items-center gap-2">
                   Request
                   <Badge className="bg-gray-100 text-gray-800">
@@ -140,13 +140,13 @@ export function TestReport({
                 </div>
                 <div className="mb-2">
                   <span className="font-medium">URL:</span>
-                  <div className="bg-slate-100 p-2 rounded mt-1   break-all">
+                  <div className="bg-muted p-2 rounded mt-1   break-all">
                     {activeTestResult.request.url}
                   </div>
                 </div>
                 <div className="mb-2">
                   <span className="font-medium">Headers:</span>
-                  <div className="bg-slate-100 p-2 rounded mt-1 max-h-24 overflow-y-auto  ">
+                  <div className="bg-muted p-2 rounded mt-1 max-h-24 overflow-y-auto  ">
                     {Object.keys(activeTestResult.request.headers).length >
                     0 ? (
                       <SyntaxHighlighter
@@ -172,7 +172,7 @@ export function TestReport({
                 </div>
                 <div>
                   <span className="font-medium">Body:</span>
-                  <div className="bg-slate-100 p-2 rounded mt-1 max-h-32 overflow-y-auto ">
+                  <div className="bg-muted p-2 rounded mt-1 max-h-32 overflow-y-auto ">
                     {activeTestResult.request.body ? (
                       <SyntaxHighlighter
                         language="json"
@@ -200,7 +200,7 @@ export function TestReport({
               </div>
 
               {/* Response */}
-              <div className="bg-slate-50 border border-slate-200 rounded-md p-4 relative">
+              <div className="bg-muted/40 border border-border rounded-md p-4 relative">
                 <div className="font-semibold mb-2 flex items-center gap-2">
                   Response
                   {activeTestResult.response && (
@@ -229,7 +229,7 @@ export function TestReport({
                     </div>
                     <div className="mb-2">
                       <span className="font-medium">Headers:</span>
-                      <div className="bg-slate-100 p-2 rounded mt-1 max-h-24 overflow-y-auto ">
+                      <div className="bg-muted p-2 rounded mt-1 max-h-24 overflow-y-auto ">
                         {Object.keys(activeTestResult.response.headers).length >
                         0 ? (
                           <SyntaxHighlighter
@@ -275,7 +275,7 @@ export function TestReport({
                       >
                         <Copy className="h-3 w-3" />
                       </Button>
-                      <div className="bg-slate-100 p-2 rounded mt-1 max-h-32 overflow-y-auto  ">
+                      <div className="bg-muted p-2 rounded mt-1 max-h-32 overflow-y-auto  ">
                         {activeTestResult.response.body ? (
                           <SyntaxHighlighter
                             language="json"
@@ -319,8 +319,8 @@ export function TestReport({
                   <Badge
                     className={`ml-2 ${
                       activeTestResult.validations.some((v) => !v.valid)
-                        ? "bg-red-100 text-red-800"
-                        : "bg-green-100 text-green-800"
+                        ? "bg-destructive/10 text-destructive"
+                        : "bg-success/10 text-success"
                     }`}
                   >
                     {
@@ -338,15 +338,15 @@ export function TestReport({
                       key={idx}
                       className={`p-2 rounded-md flex items-start ${
                         validation.valid
-                          ? "bg-green-50 text-green-800"
-                          : "bg-red-50 text-red-800"
+                          ? "bg-success/10 text-success"
+                          : "bg-destructive/10 text-destructive"
                       }`}
                     >
                       <div className="mr-2 mt-0.5">
                         {validation.valid ? (
-                          <CheckCircle2 className="h-4 w-4 text-green-500" />
+                          <CheckCircle2 className="h-4 w-4 text-success" />
                         ) : (
-                          <XCircle className="h-4 w-4 text-red-500" />
+                          <XCircle className="h-4 w-4 text-destructive" />
                         )}
                       </div>
                       <div>
@@ -365,7 +365,7 @@ export function TestReport({
 
             {/* Error Details */}
             {activeTestResult.error && (
-              <div className="bg-red-50 border border-red-200 rounded-md p-3 text-red-800 mt-4">
+              <div className="bg-red-50 border border-destructive/30 rounded-md p-3 text-red-800 mt-4">
                 <p className="font-medium">Error Message:</p>
                 <p className="mt-1">{activeTestResult.error}</p>
               </div>
@@ -381,8 +381,8 @@ export function TestReport({
                       className={`ml-2 ${
                         testCase.expectedResponse.status ===
                         activeTestResult.response?.status
-                          ? "bg-green-100 text-green-800"
-                          : "bg-red-100 text-red-800"
+                          ? "bg-success/10 text-success"
+                          : "bg-destructive/10 text-destructive"
                       }`}
                     >
                       Status{" "}
@@ -422,7 +422,7 @@ export function TestReport({
                         <div className="font-medium text-sm mb-1">
                           Expected Body:
                         </div>
-                        <div className="bg-slate-100 p-2 rounded text-xs max-h-32 overflow-y-auto">
+                        <div className="bg-muted p-2 rounded text-xs max-h-32 overflow-y-auto">
                           <SyntaxHighlighter
                             language="json"
                             style={oneLight}
@@ -447,7 +447,7 @@ export function TestReport({
                         <div className="font-medium text-sm mb-1">
                           Actual Body:
                         </div>
-                        <div className="bg-slate-100 p-2 rounded text-xs max-h-32 overflow-y-auto">
+                        <div className="bg-muted p-2 rounded text-xs max-h-32 overflow-y-auto">
                           <SyntaxHighlighter
                             language="json"
                             style={oneLight}

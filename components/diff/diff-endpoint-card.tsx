@@ -31,6 +31,7 @@ import {
   paramStatusLabel,
 } from "@/components/diff/labels";
 import { cn } from "@/lib/utils";
+import { SeverityPill } from "@/components/diff/severity-badge";
 
 export type DiffRow =
   | { kind: "added"; data: EndpointRef }
@@ -43,10 +44,10 @@ export type DiffRow =
 function StatusBadge({ status }: { status: "added" | "removed" | "changed" }) {
   const cls =
     status === "added"
-      ? "bg-teal-50 text-teal-700 border-teal-200"
+      ? "bg-success/10 text-success border-success/30"
       : status === "removed"
-        ? "bg-red-50 text-red-700 border-red-200"
-        : "bg-amber-50 text-amber-700 border-amber-200";
+        ? "bg-destructive/10 text-destructive border-destructive/30"
+        : "bg-warning/10 text-warning border-warning/30";
   return (
     <Badge variant="outline" className={cn("text-xs font-medium", cls)}>
       {paramStatusLabel(status)}
@@ -189,17 +190,17 @@ function ChangeDetails({ change }: { change: EndpointChange }) {
             </p>
             <div className="flex flex-wrap gap-1.5">
               {details.responses.added.map((c) => (
-                <Badge key={`a-${c}`} variant="outline" className="tabular-nums bg-teal-50 text-teal-800 border-teal-200">
+                <Badge key={`a-${c}`} variant="outline" className="tabular-nums bg-success/10 text-success border-success/30">
                   +{c}
                 </Badge>
               ))}
               {details.responses.removed.map((c) => (
-                <Badge key={`r-${c}`} variant="outline" className="tabular-nums bg-red-50 text-red-800 border-red-200">
+                <Badge key={`r-${c}`} variant="outline" className="tabular-nums bg-destructive/10 text-destructive border-destructive/30">
                   −{c}
                 </Badge>
               ))}
               {details.responses.changed.map((c) => (
-                <Badge key={`c-${c}`} variant="outline" className="tabular-nums bg-amber-50 text-amber-800 border-amber-200">
+                <Badge key={`c-${c}`} variant="outline" className="tabular-nums bg-warning/10 text-warning border-warning/30">
                   ~{c}
                 </Badge>
               ))}
@@ -218,17 +219,17 @@ function ChangeDetails({ change }: { change: EndpointChange }) {
             </p>
             <div className="flex flex-wrap gap-1.5">
               {details.requestBody.added.map((m) => (
-                <Badge key={`a-${m}`} variant="outline" className="font-mono text-xs bg-teal-50 text-teal-800 border-teal-200">
+                <Badge key={`a-${m}`} variant="outline" className="font-mono text-xs bg-success/10 text-success border-success/30">
                   +{m}
                 </Badge>
               ))}
               {details.requestBody.removed.map((m) => (
-                <Badge key={`r-${m}`} variant="outline" className="font-mono text-xs bg-red-50 text-red-800 border-red-200">
+                <Badge key={`r-${m}`} variant="outline" className="font-mono text-xs bg-destructive/10 text-destructive border-destructive/30">
                   −{m}
                 </Badge>
               ))}
               {details.requestBody.changed.map((m) => (
-                <Badge key={`c-${m}`} variant="outline" className="font-mono text-xs bg-amber-50 text-amber-800 border-amber-200">
+                <Badge key={`c-${m}`} variant="outline" className="font-mono text-xs bg-warning/10 text-warning border-warning/30">
                   ~{m}
                 </Badge>
               ))}
@@ -276,12 +277,12 @@ function ChangeDetails({ change }: { change: EndpointChange }) {
             </p>
             <div className="flex flex-wrap gap-1.5">
               {details.tags.removed.map((t) => (
-                <Badge key={`r-${t}`} variant="outline" className="bg-red-50 text-red-800 line-through">
+                <Badge key={`r-${t}`} variant="outline" className="bg-destructive/10 text-destructive line-through">
                   {t}
                 </Badge>
               ))}
               {details.tags.added.map((t) => (
-                <Badge key={`a-${t}`} variant="outline" className="bg-teal-50 text-teal-800">
+                <Badge key={`a-${t}`} variant="outline" className="bg-success/10 text-success">
                   {t}
                 </Badge>
               ))}
@@ -327,6 +328,7 @@ function SimpleCard({
     <Card>
       <div className="flex items-center gap-2.5 px-3 pt-3 pb-2">
         <KindPill kind={row.kind} />
+        <SeverityPill severity={row.data.severity} />
         <MethodBadge method={row.data.method} className="shrink-0" />
       </div>
       <div className="px-3 pb-3">
@@ -349,6 +351,7 @@ function MovedCard({ row }: { row: DiffRow & { kind: "moved" } }) {
     <Card>
       <div className="flex items-center gap-2.5 px-3 pt-3 pb-2">
         <KindPill kind="moved" />
+        <SeverityPill severity={row.data.severity} />
         <MethodBadge method={row.data.method} className="shrink-0" />
       </div>
       <div className="flex flex-col gap-1.5 px-3 pb-3 sm:flex-row sm:items-center">
@@ -359,7 +362,7 @@ function MovedCard({ row }: { row: DiffRow & { kind: "moved" } }) {
           className={s.pathOld}
         />
         <div className="flex shrink-0 justify-center sm:justify-start">
-          <ArrowRight className="h-4 w-4 rotate-90 text-sky-400 sm:rotate-0" />
+          <ArrowRight className="h-4 w-4 rotate-90 text-info sm:rotate-0" />
         </div>
         <PathBox
           path={row.data.to}
@@ -384,6 +387,7 @@ function ChangedCard({ row }: { row: DiffRow & { kind: "changed" } }) {
         <CollapsibleTrigger className="w-full text-left hover:bg-muted/30 transition-colors">
           <div className="flex items-center gap-2.5 px-3 pt-3 pb-2">
             <KindPill kind="changed" />
+            <SeverityPill severity={change.severity} />
             <MethodBadge method={change.method} className="shrink-0" />
             <div className="flex-1" />
             <ChevronDown

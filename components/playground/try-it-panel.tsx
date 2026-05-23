@@ -16,7 +16,8 @@ import { MethodBadge } from "@/components/method-badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { JsonBodyEditor } from "@/components/playground/json-body-editor";
+import { JsonBodyEditorLazy } from "@/components/playground/json-body-editor-lazy";
+import { MultipartBodyEditor } from "@/components/playground/multipart-body-editor";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   Select,
@@ -33,13 +34,34 @@ import {
 import { OperationSamples } from "@/components/playground/operation-samples";
 import { ResponseViewer } from "@/components/playground/response-viewer";
 import { executePlaygroundRequest } from "@/lib/playground/execute-request";
+import {
+  applyAuthToRequest,
+  authHeadersForCurl,
+  authQueryForUrl,
+} from "@/lib/playground/apply-auth";
+import {
+  credentialRequiresAuth,
+  type Credential,
+} from "@/lib/playground/credentials";
 import { assertPlaygroundRequestUrl } from "@/lib/playground/url-policy";
 import {
   buildRequestUrl,
   defaultParamValues,
   rebuildRequestUrlPreservingOrigin,
 } from "@/lib/playground/build-request";
-import { buildCurlCommand } from "@/lib/playground/build-curl";
+import { buildCurlCommand, type CurlBodyInput } from "@/lib/playground/build-curl";
+import {
+  buildFormData,
+  createMultipartStateFromFields,
+  estimateFormDataSize,
+  validateMultipartState,
+  type MultipartBodyState,
+} from "@/lib/playground/build-form-data";
+import {
+  getRequestBodyInfo,
+  type RequestBodyKind,
+} from "@/lib/playground/request-body";
+import { MAX_PROXY_BODY_BYTES } from "@/lib/security/outbound-headers";
 import {
   formatJsonBody,
   formatResponseBodyForDisplay,
@@ -56,8 +78,7 @@ type TryItPanelProps = {
   endpoint: PlaygroundEndpoint | null;
   apiData: { paths?: Record<string, unknown>; components?: unknown };
   baseUrl: string;
-  activeTokenName: string | null;
-  activeTokenValue: string | null;
+  activeCredential: Credential | null;
   totalEndpoints?: number;
   onSelectFirst?: () => void;
 };
@@ -72,14 +93,17 @@ export function TryItPanel({
   endpoint,
   apiData,
   baseUrl,
-  activeTokenName,
-  activeTokenValue,
+  activeCredential,
   totalEndpoints = 0,
   onSelectFirst,
 }: TryItPanelProps) {
   const [paramValues, setParamValues] = useState<Record<string, string>>({});
   const [headerValues, setHeaderValues] = useState<Record<string, string>>({});
   const [requestBody, setRequestBody] = useState("{}");
+  const [multipartState, setMultipartState] = useState<MultipartBodyState>({
+    rows: [],
+  });
+  const [binaryFile, setBinaryFile] = useState<File | null>(null);
   const [loading, setLoading] = useState(false);
   const [responseStatus, setResponseStatus] = useState<number | null>(null);
   const [responseTime, setResponseTime] = useState<number | null>(null);
@@ -100,6 +124,13 @@ export function TryItPanel({
     return methods?.[endpoint.method.toLowerCase()] as Record<string, unknown> | null;
   }, [endpoint, apiData]);
 
+  const requestBodyInfo = useMemo(
+    () => getRequestBodyInfo(methodData, apiData.components),
+    [methodData, apiData.components]
+  );
+
+  const bodyKind: RequestBodyKind = requestBodyInfo.kind;
+
   const pathParams = useMemo(
     () => endpoint?.parameters.filter((p) => p.in === "path") ?? [],
     [endpoint]
@@ -113,9 +144,25 @@ export function TryItPanel({
     [endpoint]
   );
 
+  const resetMultipartBody = useCallback(() => {
+    setMultipartState(
+      createMultipartStateFromFields(requestBodyInfo.multipartFields)
+    );
+  }, [requestBodyInfo.multipartFields]);
+
   const resetSampleBody = useCallback(() => {
     if (!methodData || !endpoint?.hasRequestBody) {
       setRequestBody("");
+      setMultipartState({ rows: [] });
+      setBinaryFile(null);
+      return;
+    }
+    if (bodyKind === "multipart") {
+      resetMultipartBody();
+      return;
+    }
+    if (bodyKind === "binary") {
+      setBinaryFile(null);
       return;
     }
     const samples = getOperationSamples(
@@ -140,7 +187,14 @@ export function TryItPanel({
     } else {
       setRequestBody("{}");
     }
-  }, [methodData, endpoint, baseUrl, apiData.components]);
+  }, [
+    methodData,
+    endpoint,
+    baseUrl,
+    apiData.components,
+    bodyKind,
+    resetMultipartBody,
+  ]);
 
   useEffect(() => {
     if (!endpoint) return;
@@ -196,28 +250,56 @@ export function TryItPanel({
     const headers: Record<string, string> = {
       Accept: "application/json",
     };
-    if (endpoint?.hasRequestBody && requestBody.trim()) {
+    if (
+      endpoint?.hasRequestBody &&
+      bodyKind === "json" &&
+      requestBody.trim()
+    ) {
       headers["Content-Type"] = "application/json";
     }
     headerParams.forEach((p) => {
       const v = headerValues[p.name]?.trim();
       if (v) headers[p.name] = v;
     });
-    if (activeTokenValue) {
-      headers.Authorization = `Bearer ${activeTokenValue}`;
+    if (endpoint?.requiresAuth) {
+      Object.assign(headers, authHeadersForCurl(activeCredential));
     }
     return headers;
-  }, [endpoint, requestBody, headerParams, headerValues, activeTokenValue]);
+  }, [
+    endpoint,
+    requestBody,
+    bodyKind,
+    headerParams,
+    headerValues,
+    activeCredential,
+  ]);
+
+  const curlBodyInput = useMemo((): CurlBodyInput | undefined => {
+    if (!endpoint?.hasRequestBody) return undefined;
+    if (bodyKind === "multipart") {
+      return { type: "multipart", rows: multipartState.rows };
+    }
+    if (bodyKind === "binary") {
+      return { type: "binary", file: binaryFile };
+    }
+    return { type: "json", text: requestBody };
+  }, [endpoint, bodyKind, multipartState.rows, binaryFile, requestBody]);
 
   const curlCommand = useMemo(() => {
     if (!endpoint) return "";
-    return buildCurlCommand(
-      requestUrl,
-      endpoint.method,
-      buildHeaders(),
-      requestBody
-    );
-  }, [endpoint, requestUrl, buildHeaders, requestBody]);
+    let url = requestUrl;
+    const q = authQueryForUrl(activeCredential, endpoint.requiresAuth);
+    for (const [k, v] of Object.entries(q)) {
+      try {
+        const u = new URL(url);
+        u.searchParams.set(k, v);
+        url = u.toString();
+      } catch {
+        /* keep url */
+      }
+    }
+    return buildCurlCommand(url, endpoint.method, buildHeaders(), curlBodyInput);
+  }, [endpoint, requestUrl, buildHeaders, curlBodyInput, activeCredential]);
 
   const execute = async () => {
     if (!endpoint) return;
@@ -241,14 +323,52 @@ export function TryItPanel({
 
     if (
       endpoint.hasRequestBody &&
-      requestBody.trim() &&
       !["GET", "HEAD"].includes(endpoint.method)
     ) {
-      options.body = requestBody;
+      if (bodyKind === "multipart") {
+        const validationError = validateMultipartState(multipartState);
+        if (validationError) {
+          toast.error(validationError);
+          setLoading(false);
+          return;
+        }
+        const size = estimateFormDataSize(multipartState);
+        if (size > MAX_PROXY_BODY_BYTES) {
+          toast.error(
+            `Request body exceeds ${MAX_PROXY_BODY_BYTES / (1024 * 1024)} MB limit`
+          );
+          setLoading(false);
+          return;
+        }
+        options.body = buildFormData(multipartState);
+      } else if (bodyKind === "binary") {
+        if (!binaryFile) {
+          toast.error("Select a file to upload");
+          setLoading(false);
+          return;
+        }
+        if (binaryFile.size > MAX_PROXY_BODY_BYTES) {
+          toast.error(
+            `File exceeds ${MAX_PROXY_BODY_BYTES / (1024 * 1024)} MB limit`
+          );
+          setLoading(false);
+          return;
+        }
+        options.body = binaryFile;
+      } else if (requestBody.trim()) {
+        options.body = requestBody;
+      }
     }
 
+    const authed = applyAuthToRequest(
+      activeCredential,
+      requestUrl,
+      options,
+      endpoint.requiresAuth
+    );
+
     try {
-      const res = await executePlaygroundRequest(requestUrl, options);
+      const res = await executePlaygroundRequest(authed.url, authed.init);
       setResponseStatus(res.status);
       setResponseTime(res.responseTime);
       setResponseHeaders(res.headers);
@@ -342,9 +462,13 @@ export function TryItPanel({
     };
     const enums = p.schema?.enum;
 
+    const fieldId = `param-${p.in}-${p.name}`;
     return (
       <div key={`${p.in}-${p.name}`} className="space-y-1">
-        <Label className="text-xs font-medium flex items-center gap-1 flex-wrap">
+        <Label
+          htmlFor={fieldId}
+          className="text-xs font-medium flex items-center gap-1 flex-wrap"
+        >
           {p.name}
           {p.required && <span className="text-destructive">*</span>}
           <span className="text-muted-foreground font-normal">({p.in})</span>
@@ -357,7 +481,7 @@ export function TryItPanel({
         )}
         {enums && enums.length > 0 ? (
           <Select value={value || undefined} onValueChange={setValue}>
-            <SelectTrigger className="h-8 text-sm font-mono">
+            <SelectTrigger id={fieldId} className="h-8 text-sm font-mono">
               <SelectValue placeholder={`Select ${p.name}`} />
             </SelectTrigger>
             <SelectContent>
@@ -370,6 +494,7 @@ export function TryItPanel({
           </Select>
         ) : (
           <Input
+            id={fieldId}
             value={value}
             onChange={(e) => setValue(e.target.value)}
             className="h-8 font-mono text-sm"
@@ -391,7 +516,7 @@ export function TryItPanel({
     return (
       <div
         id="playground-try-it"
-        className="flex flex-1 items-center justify-center p-8 text-center min-h-0 bg-white"
+        className="flex flex-1 items-center justify-center p-8 text-center min-h-0 bg-card"
       >
         <div className="max-w-md space-y-4">
           <p className="text-lg font-semibold text-foreground">
@@ -426,14 +551,14 @@ export function TryItPanel({
   }
 
   const authWarning =
-    endpoint.requiresAuth && !activeTokenValue;
+    endpoint.requiresAuth && !credentialRequiresAuth(activeCredential);
 
   return (
     <div
       id="playground-try-it"
-      className="flex flex-col h-full min-h-0 bg-white"
+      className="flex flex-col h-full min-h-0 bg-card"
     >
-      <div className="shrink-0 border-b border-border bg-white px-4 py-3 space-y-2.5">
+      <div className="shrink-0 border-b border-border bg-card px-4 py-3 space-y-2.5">
         <div className="flex items-center gap-2 min-w-0">
           <MethodBadge
             method={endpoint.method}
@@ -504,7 +629,7 @@ export function TryItPanel({
         <Tabs
           value={activeTab}
           onValueChange={setActiveTab}
-          className="flex-1 min-h-0 flex flex-col gap-0 px-6 pt-4 bg-white"
+          className="flex-1 min-h-0 flex flex-col gap-0 px-6 pt-4 bg-card"
         >
           <TabsList className="h-9 shrink-0 w-fit mb-3">
             <TabsTrigger value="params" className="text-xs">
@@ -561,43 +686,93 @@ export function TryItPanel({
             className="flex-1 min-h-0 overflow-y-auto mt-0 space-y-4 data-[state=inactive]:hidden"
           >
             {authWarning && (
-              <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900">
+              <div className="rounded-lg border border-warning/30 bg-warning/10 px-3 py-2 text-xs text-warning">
                 This endpoint requires a Bearer token. Add or select a role token
                 in the toolbar above.
               </div>
             )}
             {endpoint.hasRequestBody ? (
               <div className="space-y-2">
-                <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+                <Label
+                  id="request-body-label"
+                  className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground"
+                >
                   Body
-                </p>
-                <div className="flex flex-wrap gap-2">
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    className="h-7 text-xs gap-1"
-                    onClick={formatBody}
-                  >
-                    <AlignLeft className="h-3.5 w-3.5" />
-                    Format JSON
-                  </Button>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    className="h-7 text-xs gap-1"
-                    onClick={resetSampleBody}
-                  >
-                    <RotateCcw className="h-3.5 w-3.5" />
-                    Reset to sample
-                  </Button>
-                </div>
-                <JsonBodyEditor
-                  value={requestBody}
-                  onChange={setRequestBody}
-                  minHeight="220px"
-                />
+                  {requestBodyInfo.contentType && (
+                    <span className="font-mono font-normal normal-case ml-2 text-muted-foreground">
+                      ({requestBodyInfo.contentType})
+                    </span>
+                  )}
+                </Label>
+                {bodyKind === "json" && (
+                  <>
+                    <div className="flex flex-wrap gap-2">
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        className="h-7 text-xs gap-1"
+                        onClick={formatBody}
+                      >
+                        <AlignLeft className="h-3.5 w-3.5" />
+                        Format JSON
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        className="h-7 text-xs gap-1"
+                        onClick={resetSampleBody}
+                      >
+                        <RotateCcw className="h-3.5 w-3.5" />
+                        Reset to sample
+                      </Button>
+                    </div>
+                    <JsonBodyEditorLazy
+                      value={requestBody}
+                      onChange={setRequestBody}
+                      minHeight="220px"
+                      aria-labelledby="request-body-label"
+                    />
+                  </>
+                )}
+                {bodyKind === "multipart" && (
+                  <>
+                    <div className="flex flex-wrap gap-2">
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        className="h-7 text-xs gap-1"
+                        onClick={resetSampleBody}
+                      >
+                        <RotateCcw className="h-3.5 w-3.5" />
+                        Reset fields
+                      </Button>
+                    </div>
+                    <MultipartBodyEditor
+                      state={multipartState}
+                      onChange={setMultipartState}
+                    />
+                  </>
+                )}
+                {bodyKind === "binary" && (
+                  <div className="space-y-2">
+                    <input
+                      type="file"
+                      className="text-sm"
+                      onChange={(e) =>
+                        setBinaryFile(e.target.files?.[0] ?? null)
+                      }
+                    />
+                    {binaryFile && (
+                      <p className="text-xs text-muted-foreground font-mono">
+                        {binaryFile.name} ({(binaryFile.size / 1024).toFixed(1)}{" "}
+                        KB)
+                      </p>
+                    )}
+                  </div>
+                )}
               </div>
             ) : (
               <p className="text-xs text-muted-foreground">
@@ -637,7 +812,7 @@ export function TryItPanel({
                 )}
               </div>
               <CollapsibleContent className="mt-2">
-                <pre className="text-[11px] font-mono bg-white rounded-md border p-3 overflow-x-auto whitespace-pre-wrap break-all">
+                <pre className="text-[11px] font-mono bg-card rounded-md border p-3 overflow-x-auto whitespace-pre-wrap break-all">
                   {curlCommand}
                 </pre>
               </CollapsibleContent>
@@ -658,17 +833,21 @@ export function TryItPanel({
           </TabsContent>
         </Tabs>
 
-        <div className="shrink-0 sticky bottom-0 z-10 border-t border-border bg-white px-6 py-3 flex flex-wrap items-center gap-3">
+        <div className="shrink-0 sticky bottom-0 z-10 border-t border-border bg-card px-6 py-3 flex flex-wrap items-center gap-3">
           <Button className="gap-2" onClick={execute} disabled={loading}>
             {loading ? (
-              <Loader2 className="h-4 w-4 animate-spin" />
+              <Loader2 className="h-4 w-4 motion-safe:animate-spin" />
             ) : (
               <Play className="h-4 w-4" />
             )}
             Execute
           </Button>
           {responseStatus != null && (
-            <span className="text-xs text-muted-foreground tabular-nums">
+            <span
+              role="status"
+              aria-live="polite"
+              className="text-xs text-muted-foreground tabular-nums"
+            >
               Last: {responseStatus}
               {responseTime != null && ` · ${responseTime} ms`}
             </span>

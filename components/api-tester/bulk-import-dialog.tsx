@@ -183,7 +183,7 @@ export function BulkImportDialog({
                   )}
                 </div>
                 {bulkImportError && (
-                  <p className="text-red-500 text-sm flex items-center gap-1">
+                  <p className="text-destructive text-sm flex items-center gap-1">
                     <AlertTriangle className="h-4 w-4" />
                     {bulkImportError}
                   </p>
@@ -204,7 +204,7 @@ export function BulkImportDialog({
                     Copy
                   </Button>
                 </div>
-                <div className="bg-slate-50 rounded-md">
+                <div className="bg-muted/40 rounded-md">
                   <SyntaxHighlighter
                     language="json"
                     style={oneLight}
@@ -221,13 +221,13 @@ export function BulkImportDialog({
             </TabsContent>
           </Tabs>
 
-          <div className="bg-amber-50 border border-amber-200 p-2 rounded-md">
-            <p className="text-amber-800 text-xs">
+          <div className="bg-warning/10 border border-warning/30 p-2 rounded-md">
+            <p className="text-warning text-xs">
               <AlertTriangle className="h-3 w-3 inline mr-1" />
               Test cases will use the current request setup (URL, method,
               headers)
             </p>
-            <p className="text-amber-800 text-xs mt-1">
+            <p className="text-warning text-xs mt-1">
               Add a &quot;fields&quot; object to specify request body fields for each
               test case
             </p>

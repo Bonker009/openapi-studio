@@ -21,6 +21,7 @@ export default function PlaygroundPage() {
   } | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [workingPaths, setWorkingPaths] = useState<Set<string> | undefined>();
 
   useEffect(() => {
     async function load() {
@@ -33,6 +34,20 @@ export default function PlaygroundPage() {
           return;
         }
         setApiData(spec);
+        const statusData = await fetchData("status", id);
+        if (Array.isArray(statusData)) {
+          const working = new Set<string>();
+          for (const row of statusData as {
+            path: string;
+            method: string;
+            working: boolean;
+          }[]) {
+            if (row.working) {
+              working.add(`${row.method.toLowerCase()}:${row.path}`);
+            }
+          }
+          setWorkingPaths(working);
+        }
       } catch {
         setError("Failed to load API specification");
         toast.error("Failed to load playground");
@@ -77,6 +92,7 @@ export default function PlaygroundPage() {
       specTitle={title}
       specVersion={apiData.info?.version}
       apiData={apiData}
+      workingPaths={workingPaths}
     />
   );
 }

@@ -11,11 +11,11 @@ import { toast } from "sonner";
 
 function statusVariant(code: string) {
   if (code.startsWith("2"))
-    return "bg-teal-50 text-teal-800 border-teal-200";
+    return "bg-success/10 text-success border-success/30";
   if (code.startsWith("4"))
     return "bg-destructive/10 text-destructive border-destructive/20";
   if (code.startsWith("5"))
-    return "bg-amber-50 text-amber-800 border-amber-200";
+    return "bg-warning/10 text-warning border-warning/30";
   return "bg-muted text-muted-foreground border-border";
 }
 
@@ -42,8 +42,8 @@ function SampleBlock({
   };
 
   return (
-    <div className="rounded-lg border border-border overflow-hidden bg-white">
-      <div className="flex items-center justify-between gap-2 px-3 py-2 bg-white border-b border-border">
+    <div className="rounded-lg border border-border overflow-hidden bg-card">
+      <div className="flex items-center justify-between gap-2 px-3 py-2 bg-card border-b border-border">
         {title ? (
           <span className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
             {title}
@@ -104,6 +104,10 @@ export function OperationSamples({ samples }: OperationSamplesProps) {
         <SampleBlock
           title="Sample request body"
           code={samples.requestBody!}
+          mono={
+            !samples.requestBody!.includes("(binary)") &&
+            !samples.requestBody!.includes("multipart")
+          }
         />
       )}
 

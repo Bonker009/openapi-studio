@@ -15,7 +15,7 @@ export function MarkdownHelpModal() {
   return (
     <Dialog>
       <DialogTrigger asChild>
-        <Button variant="ghost" size="icon" title="Markdown Help">
+        <Button variant="ghost" size="icon" aria-label="Markdown help">
           <HelpCircle className="h-4 w-4" />
         </Button>
       </DialogTrigger>
@@ -25,6 +25,7 @@ export function MarkdownHelpModal() {
           <DialogDescription>A quick reference for common Markdown syntax.</DialogDescription>
         </DialogHeader>
         <div className="grid gap-4 py-4">
+          <h2 className="sr-only">Reference</h2>
           <div className="space-y-2">
             <h3 className="text-lg font-medium">Headings</h3>
             <p>

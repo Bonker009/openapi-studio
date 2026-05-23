@@ -297,8 +297,8 @@ export default function TestCaseGeneratorPanel({
                         <span
                           className={
                             results[idx].ok
-                              ? "text-green-600 ml-2"
-                              : "text-red-600 ml-2"
+                              ? "text-success ml-2"
+                              : "text-destructive ml-2"
                           }
                         >
                           {results[idx].status}

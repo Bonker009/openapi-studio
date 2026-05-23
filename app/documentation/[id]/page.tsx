@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useCallback } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -11,6 +11,7 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ChevronDown, ChevronRight, Search, X } from "lucide-react";
 import { EndpointDetailModal } from "@/components/endpoint-detail-modal";
@@ -28,6 +29,9 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { fetchData, saveData } from "@/lib/data-service";
 import { getControllerBadgeStyle } from "@/lib/controller-colors";
 import { toast } from "sonner";
+import { SmokeTestDialog } from "@/components/playground/smoke-test-dialog";
+import { extractPlaygroundEndpoints } from "@/lib/playground/endpoints";
+import { getActiveCredential } from "@/lib/playground/credentials";
 
 import Link from "next/link";
 import { useParams } from "next/navigation";
@@ -71,6 +75,10 @@ export default function Documentation() {
   const [controllerSearch, setControllerSearch] = useState("");
   const [historyOpen, setHistoryOpen] = useState(false);
   const [exportOpen, setExportOpen] = useState(false);
+  const [smokeOpen, setSmokeOpen] = useState(false);
+  const [smokeCredential, setSmokeCredential] = useState(
+    () => null as import("@/lib/playground/credentials").Credential | null
+  );
 
   useEffect(() => {
     async function loadData() {
@@ -379,6 +387,35 @@ export default function Documentation() {
   const totalEndpoints = endpoints.length;
   const workingEndpoints = endpoints.filter((e) => e.working).length;
 
+  const playgroundEndpoints = useMemo(
+    () =>
+      apiData
+        ? extractPlaygroundEndpoints({
+            paths: apiData.paths as Record<string, Record<string, unknown>>,
+            security: apiData.security,
+          })
+        : [],
+    [apiData]
+  );
+
+  const workingPaths = useMemo(() => {
+    const set = new Set<string>();
+    for (const e of endpoints) {
+      if (e.working) {
+        set.add(`${e.method.toLowerCase()}:${e.path}`);
+      }
+    }
+    return set;
+  }, [endpoints]);
+
+  const smokeBaseUrl =
+    apiData?.servers?.[0]?.url?.replace(/\/$/, "") ?? "http://localhost:8080";
+
+  const openSmokeTests = useCallback(() => {
+    setSmokeCredential(getActiveCredential(id));
+    setSmokeOpen(true);
+  }, [id]);
+
   if (loading) {
     return (
       <div className="min-h-screen bg-background">
@@ -387,7 +424,7 @@ export default function Documentation() {
           eyebrow="API documentation"
           showBackButton={true}
         />
-        <main className="container mx-auto py-8 px-4 max-w-screen-2xl">
+        <main id="main-content" className="container mx-auto py-8 px-4 max-w-screen-2xl">
           <div className="mb-8 rounded-xl border bg-card p-8 space-y-4">
             <Skeleton className="h-4 w-32" />
             <Skeleton className="h-10 w-2/3 max-w-md" />
@@ -423,10 +460,10 @@ export default function Documentation() {
     return (
       <div className="min-h-screen bg-background">
         <Header title="Error" eyebrow="API documentation" showBackButton={true} />
-        <main className="container mx-auto py-8 px-4">
+        <main id="main-content" className="container mx-auto py-8 px-4">
           <Card>
             <CardHeader>
-              <CardTitle className="text-red-600">
+              <CardTitle className="text-destructive">
                 Error Loading Documentation
               </CardTitle>
             </CardHeader>
@@ -460,7 +497,7 @@ export default function Documentation() {
         specId={id}
         onHistoryClick={() => setHistoryOpen(true)}
       />
-      <main className="container mx-auto py-8 px-4 max-w-screen-2xl">
+      <main id="main-content" className="container mx-auto py-8 px-4 max-w-screen-2xl">
         <DocumentationSpecHeader
           specId={id}
           title={apiData?.info?.title || "API Documentation"}
@@ -475,6 +512,21 @@ export default function Documentation() {
           totalEndpoints={totalEndpoints}
           workingEndpoints={workingEndpoints}
           onDownloadCsv={() => setExportOpen(true)}
+          onSmokeTests={openSmokeTests}
+        />
+
+        <SmokeTestDialog
+          open={smokeOpen}
+          onOpenChange={setSmokeOpen}
+          specId={id}
+          baseUrl={smokeBaseUrl}
+          credential={smokeCredential}
+          endpoints={playgroundEndpoints}
+          apiData={{
+            paths: apiData?.paths as Record<string, unknown> | undefined,
+            components: apiData?.components,
+          }}
+          workingPaths={workingPaths}
         />
 
         <ExportEndpointsDialog
@@ -536,7 +588,11 @@ export default function Documentation() {
               {/* Add search input */}
               <div className="relative">
                 <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                <Label htmlFor="controller-search" className="sr-only">
+                  Search controllers
+                </Label>
                 <Input
+                  id="controller-search"
                   placeholder="Search controllers…"
                   value={controllerSearch}
                   onChange={(e) => setControllerSearch(e.target.value)}
@@ -621,6 +677,7 @@ export default function Documentation() {
 
         {selectedEndpoint && (
           <EndpointDetailModal
+            specId={id}
             isOpen={isModalOpen}
             onClose={closeEndpointModal}
             endpoint={selectedEndpoint}

@@ -288,11 +288,11 @@ export function RequestBuilder({
                     method === "GET"
                       ? "bg-blue-100 text-blue-800 border-blue-200"
                       : method === "POST"
-                      ? "bg-green-100 text-green-800 border-green-200"
+                      ? "bg-success/10 text-success border-success/30"
                       : method === "PUT"
                       ? "bg-yellow-100 text-yellow-800 border-yellow-200"
                       : method === "DELETE"
-                      ? "bg-red-100 text-red-800 border-red-200"
+                      ? "bg-destructive/10 text-destructive border-destructive/30"
                       : "bg-gray-100 text-gray-800 border-gray-200"
                   )}
                   variant="outline"
@@ -365,7 +365,7 @@ export function RequestBuilder({
                             variant="ghost"
                             size="sm"
                             onClick={() => handleRemoveHeader(key)}
-                            className="px-2 text-red-500 hover:text-red-700 hover:bg-red-50"
+                            className="px-2 text-destructive hover:text-red-700 hover:bg-red-50"
                           >
                             <XCircle className="h-4 w-4" />
                           </Button>
@@ -454,7 +454,7 @@ export function RequestBuilder({
                               variant="ghost"
                               size="sm"
                               onClick={() => removeFormField(index)}
-                              className="px-2 text-red-500 hover:text-red-700 hover:bg-red-50"
+                              className="px-2 text-destructive hover:text-red-700 hover:bg-red-50"
                             >
                               <X className="h-4 w-4" />
                             </Button>
@@ -529,7 +529,7 @@ export function RequestBuilder({
                           )}
                           <Button
                             variant="outline"
-                            className="bg-green-300 hover:bg-green-400 transform-fill duration-500"
+                            className="bg-green-300 hover:bg-success transform-fill duration-500"
                             size="sm"
                             onClick={handleFormatJson}
                             type="button"
@@ -593,7 +593,7 @@ export function RequestBuilder({
                           <div className="flex items-center gap-2">
                             <Label className="text-sm">
                               {param.name}
-                              {param.required && <span className="text-red-500">*</span>}
+                              {param.required && <span className="text-destructive">*</span>}
                             </Label>
                             <Badge variant="outline">{param.in}</Badge>
                             {param.description && (
@@ -698,7 +698,7 @@ export function RequestBuilder({
                       variant="ghost"
                       size="sm"
                       onClick={() => removeFile(uploadedFile.id)}
-                      className="px-2 text-red-500 hover:text-red-700 hover:bg-red-50"
+                      className="px-2 text-destructive hover:text-red-700 hover:bg-red-50"
                     >
                       <X className="h-4 w-4" />
                     </Button>

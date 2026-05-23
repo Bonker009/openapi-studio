@@ -108,7 +108,7 @@ export default function ApiAutoTestPage() {
                   <div key={idx} className="border rounded p-3 bg-gray-50">
                     <div className="flex items-center gap-2 mb-2">
                       <Badge>{testCases[idx]?.name || `Test #${idx + 1}`}</Badge>
-                      <span className={res.ok ? "text-green-600" : "text-red-600"}>
+                      <span className={res.ok ? "text-success" : "text-destructive"}>
                         {res.status}
                       </span>
                     </div>

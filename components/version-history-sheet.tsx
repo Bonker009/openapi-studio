@@ -20,6 +20,8 @@ import {
 } from "@/lib/data-service";
 import { toast } from "sonner";
 import { useConfirmDialog } from "@/components/confirm-dialog";
+import { SeverityBadge } from "@/components/diff/severity-badge";
+import { diffIsEmpty } from "@/lib/openapi-diff";
 
 function formatDate(ts: string) {
   const d = new Date(Number(ts));
@@ -114,9 +116,17 @@ export function VersionHistorySheet({
                 >
                   <div className="flex items-start justify-between gap-2">
                     <div>
-                      <Badge variant="info" className="tabular-nums">
-                        v{entry.version}
-                      </Badge>
+                      <div className="flex flex-wrap items-center gap-2">
+                        <Badge variant="info" className="tabular-nums">
+                          v{entry.version}
+                        </Badge>
+                        {entry.summary &&
+                          !diffIsEmpty(entry.summary) && (
+                            <SeverityBadge
+                              severity={entry.summary.worstSeverity}
+                            />
+                          )}
+                      </div>
                       <p className="text-xs text-muted-foreground mt-1 tabular-nums">
                         {formatDate(entry.ts)}
                       </p>

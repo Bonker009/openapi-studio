@@ -276,9 +276,11 @@ export function MarkdownEditor({
         <span>{value.length.toLocaleString()} characters</span>
         {saveLabel && (
           <span
+            role="status"
+            aria-live="polite"
             className={cn(
-              saveStatus === "saved" && "text-teal-600",
-              saveStatus === "saving" && "text-muted-foreground animate-pulse"
+              saveStatus === "saved" && "text-success",
+              saveStatus === "saving" && "text-muted-foreground motion-safe:animate-pulse"
             )}
           >
             {saveLabel}

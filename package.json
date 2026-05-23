@@ -7,6 +7,7 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint .",
+    "test": "tsx --test lib/openapi-diff.test.ts lib/playground/generate-sample.test.ts lib/playground/request-body.test.ts lib/playground/build-form-data.test.ts",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "tsx scripts/run-migrate.ts",
     "db:import": "tsx scripts/migrate-json-to-db.ts"

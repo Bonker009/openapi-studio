@@ -10,6 +10,7 @@ import {
   Shield,
   CheckCircle2,
   Layers,
+  FlaskConical,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -25,6 +26,7 @@ type DocumentationSpecHeaderProps = {
   totalEndpoints: number;
   workingEndpoints: number;
   onDownloadCsv: () => void;
+  onSmokeTests?: () => void;
 };
 
 function formatVersion(version?: string) {
@@ -75,6 +77,7 @@ export function DocumentationSpecHeader({
   totalEndpoints,
   workingEndpoints,
   onDownloadCsv,
+  onSmokeTests,
 }: DocumentationSpecHeaderProps) {
   return (
     <section className="mb-8 overflow-hidden rounded-xl border bg-card shadow-sm">
@@ -106,15 +109,28 @@ export function DocumentationSpecHeader({
             )}
           </div>
 
-          <Button
-            variant="outline"
-            size="sm"
-            className="shrink-0 gap-2 bg-background/80"
-            onClick={onDownloadCsv}
-          >
-            <Download className="h-4 w-4" />
-            Export
-          </Button>
+          <div className="flex flex-wrap gap-2 shrink-0">
+            {onSmokeTests && (
+              <Button
+                variant="outline"
+                size="sm"
+                className="gap-2 bg-background/80"
+                onClick={onSmokeTests}
+              >
+                <FlaskConical className="h-4 w-4" />
+                Smoke tests
+              </Button>
+            )}
+            <Button
+              variant="outline"
+              size="sm"
+              className="gap-2 bg-background/80"
+              onClick={onDownloadCsv}
+            >
+              <Download className="h-4 w-4" />
+              Export
+            </Button>
+          </div>
         </div>
 
         <div className="mt-6 grid grid-cols-2 gap-3 max-w-md">
@@ -128,7 +144,7 @@ export function DocumentationSpecHeader({
             label="Working"
             value={workingEndpoints}
             icon={CheckCircle2}
-            className="border-teal-200/80 bg-teal-50/50"
+            className="border-success/30 bg-success/10"
           />
         </div>
       </div>

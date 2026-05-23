@@ -9,10 +9,10 @@ import { cn } from "@/lib/utils";
 const ALL_KINDS: DiffKind[] = ["added", "removed", "changed", "moved"];
 
 const KIND_STYLES: Record<DiffKind, string> = {
-  added: "data-[state=on]:bg-teal-100 data-[state=on]:text-teal-900",
-  removed: "data-[state=on]:bg-red-100 data-[state=on]:text-red-900",
-  changed: "data-[state=on]:bg-amber-100 data-[state=on]:text-amber-900",
-  moved: "data-[state=on]:bg-violet-100 data-[state=on]:text-violet-900",
+  added: "data-[state=on]:bg-success/15 data-[state=on]:text-success",
+  removed: "data-[state=on]:bg-destructive/15 data-[state=on]:text-destructive",
+  changed: "data-[state=on]:bg-warning/15 data-[state=on]:text-warning",
+  moved: "data-[state=on]:bg-info/15 data-[state=on]:text-info",
 };
 
 function countForKind(summary: DiffSummary, kind: DiffKind): number {

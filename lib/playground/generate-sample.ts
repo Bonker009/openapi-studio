@@ -1,8 +1,13 @@
 import type { OpenApiParameter } from "@/lib/playground/endpoints";
 import { buildRequestUrl } from "@/lib/playground/build-request";
 import {
+  formatMultipartBodyHint,
+  getRequestBodyInfo,
+} from "@/lib/playground/request-body";
+import {
   getRequestBodySchema,
   getResponseBodySchema,
+  resolveOpenApiSchema,
 } from "@/lib/openapi-schema";
 
 type OpenApiComponents = { schemas?: Record<string, unknown> };
@@ -42,6 +47,38 @@ function exampleFromContent(
   return undefined;
 }
 
+function isPlainObject(value: unknown): value is Record<string, unknown> {
+  return value !== null && typeof value === "object" && !Array.isArray(value);
+}
+
+export function isTrivialEmptyObject(sample: unknown): boolean {
+  return isPlainObject(sample) && Object.keys(sample).length === 0;
+}
+
+/** Schema likely has more structure than an empty `{}` sample. */
+export function schemaLooksNonTrivial(schema: unknown): boolean {
+  if (!schema || typeof schema !== "object" || Array.isArray(schema)) {
+    return false;
+  }
+  const s = schema as Record<string, unknown>;
+  if (typeof s.$ref === "string") return true;
+  if (Array.isArray(s.allOf) && s.allOf.length > 0) return true;
+  if (Array.isArray(s.oneOf) && s.oneOf.length > 0) return true;
+  if (Array.isArray(s.anyOf) && s.anyOf.length > 0) return true;
+  const props = s.properties as Record<string, unknown> | undefined;
+  return Boolean(props && Object.keys(props).length > 0);
+}
+
+function mergeObjectSamples(
+  target: Record<string, unknown>,
+  part: unknown
+): void {
+  if (!isPlainObject(part)) return;
+  for (const [key, value] of Object.entries(part)) {
+    target[key] = value;
+  }
+}
+
 /** Generate example JSON from an OpenAPI schema (Swagger-style). */
 export function generateOpenApiSample(
   schema: unknown,
@@ -54,20 +91,46 @@ export function generateOpenApiSample(
   const comps = components as OpenApiComponents | undefined;
 
   if (typeof s.$ref === "string") {
-    const name = s.$ref.replace("#/components/schemas/", "");
+    const name = s.$ref.replace(/^#\/components\/schemas\//, "");
     if (comps?.schemas?.[name]) {
       return generateOpenApiSample(comps.schemas[name], components, depth + 1);
     }
     return null;
   }
 
+  if (Array.isArray(s.allOf) && s.allOf.length > 0) {
+    const merged: Record<string, unknown> = {};
+    let nonObject: unknown = undefined;
+    for (const part of s.allOf) {
+      const partSample = generateOpenApiSample(part, components, depth + 1);
+      if (isPlainObject(partSample)) {
+        mergeObjectSamples(merged, partSample);
+      } else if (partSample !== null && partSample !== undefined) {
+        nonObject = partSample;
+      }
+    }
+    if (Object.keys(merged).length > 0) return merged;
+    return nonObject ?? null;
+  }
+
+  const oneOfOrAnyOf = (s.oneOf ?? s.anyOf) as unknown[] | undefined;
+  if (Array.isArray(oneOfOrAnyOf) && oneOfOrAnyOf.length > 0) {
+    return generateOpenApiSample(oneOfOrAnyOf[0], components, depth + 1);
+  }
+
   if (s.type === "object" || s.properties) {
     const result: Record<string, unknown> = {};
     const props = (s.properties as Record<string, unknown>) ?? {};
-    const required = (s.required as string[]) ?? [];
     for (const propName of Object.keys(props)) {
-      if (required.includes(propName)) {
-        result[propName] = generateOpenApiSample(props[propName], components, depth + 1);
+      const propSchema = props[propName] as Record<string, unknown>;
+      if (propSchema.default !== undefined) {
+        result[propName] = propSchema.default;
+      } else {
+        result[propName] = generateOpenApiSample(
+          propSchema,
+          components,
+          depth + 1
+        );
       }
     }
     return result;
@@ -78,6 +141,7 @@ export function generateOpenApiSample(
   }
 
   if (s.type === "string") {
+    if (s.default !== undefined) return s.default;
     if (s.format === "date-time") return "2023-01-01T12:00:00Z";
     if (s.format === "date") return "2023-01-01";
     if (s.format === "uuid") return "123e4567-e89b-12d3-a456-426614174000";
@@ -88,6 +152,7 @@ export function generateOpenApiSample(
   }
 
   if (s.type === "integer" || s.type === "number") {
+    if (s.default !== undefined) return s.default;
     const min = s.minimum as number | undefined;
     const max = s.maximum as number | undefined;
     if (min !== undefined && max !== undefined) {
@@ -95,17 +160,30 @@ export function generateOpenApiSample(
     }
     if (min !== undefined) return min;
     if (max !== undefined) return max;
-    return s.type === "integer" ? 0 : 0;
+    return 0;
   }
 
-  if (s.type === "boolean") return true;
-
-  const composite = (s.oneOf ?? s.anyOf ?? s.allOf) as unknown[] | undefined;
-  if (Array.isArray(composite) && composite.length > 0) {
-    return generateOpenApiSample(composite[0], components, depth + 1);
+  if (s.type === "boolean") {
+    return s.default !== undefined ? s.default : true;
   }
 
   return null;
+}
+
+/** Resolve refs then generate; used when no explicit example in the spec. */
+export function sampleFromSchema(
+  schema: unknown,
+  components: unknown
+): unknown {
+  if (!schema) return null;
+
+  const comps = components as OpenApiComponents | undefined;
+  const resolved = resolveOpenApiSchema(schema, comps);
+  let sample = generateOpenApiSample(resolved, components);
+  if (isTrivialEmptyObject(sample) && schemaLooksNonTrivial(schema)) {
+    sample = generateOpenApiSample(schema, components);
+  }
+  return sample;
 }
 
 export function formatSampleJson(value: unknown): string {
@@ -115,6 +193,25 @@ export function formatSampleJson(value: unknown): string {
   } catch {
     return String(value);
   }
+}
+
+function bodyFromSample(
+  example: unknown | undefined,
+  schema: unknown | undefined,
+  components: unknown
+): string | null {
+  if (example !== undefined) {
+    const body = formatSampleJson(example);
+    return body || null;
+  }
+  if (!schema) return null;
+  const sample = sampleFromSchema(schema, components);
+  const body = formatSampleJson(sample);
+  if (!body) return null;
+  if (body.trim() === "{}" && schemaLooksNonTrivial(schema)) {
+    return null;
+  }
+  return body;
 }
 
 /** Placeholder values for sample URL display (includes optional query params). */
@@ -178,22 +275,28 @@ export function getOperationSamples(
   const requestUrl = buildSampleRequestUrl(baseUrl, path, parameters);
 
   let requestBody: string | null = null;
-  const requestBodySchema = getRequestBodySchema(
-    methodData as { requestBody?: { content?: Record<string, { schema?: unknown; example?: unknown }> } }
-  );
-  const requestContent = (
-    methodData as { requestBody?: { content?: Record<string, { schema?: unknown; example?: unknown; examples?: Record<string, { value?: unknown }> }> } }
-  ).requestBody?.content;
+  const bodyInfo = getRequestBodyInfo(methodData, components);
 
-  if (requestBodySchema || requestContent) {
-    const example = exampleFromContent(requestContent);
-    const sample =
-      example ??
-      (requestBodySchema
-        ? generateOpenApiSample(requestBodySchema, components)
-        : null);
-    const formatted = formatSampleJson(sample);
-    requestBody = formatted || null;
+  if (bodyInfo.kind === "multipart") {
+    requestBody = formatMultipartBodyHint(bodyInfo.multipartFields);
+  } else if (bodyInfo.kind === "binary") {
+    requestBody = "file: (binary octet-stream)";
+  } else {
+    const requestBodySchema = getRequestBodySchema(
+      methodData as { requestBody?: { content?: Record<string, { schema?: unknown; example?: unknown }> } }
+    );
+    const requestContent = (
+      methodData as { requestBody?: { content?: Record<string, { schema?: unknown; example?: unknown; examples?: Record<string, { value?: unknown }> }> } }
+    ).requestBody?.content;
+
+    if (requestBodySchema || requestContent) {
+      const example = exampleFromContent(requestContent);
+      requestBody = bodyFromSample(
+        example,
+        requestBodySchema ?? pickJsonContent(requestContent)?.schema,
+        components
+      );
+    }
   }
 
   const responsesRaw = (
@@ -224,10 +327,7 @@ export function getOperationSamples(
       const schema = resp?.content
         ? pickJsonContent(resp.content)?.schema
         : undefined;
-      const sample =
-        example ??
-        (schema ? generateOpenApiSample(schema, components) : null);
-      const body = formatSampleJson(sample);
+      const body = bodyFromSample(example, schema, components);
       if (!body) continue;
       responses.push({
         code,
@@ -244,8 +344,7 @@ export function getOperationSamples(
       }
     );
     if (fallbackSchema) {
-      const sample = generateOpenApiSample(fallbackSchema, components);
-      const body = formatSampleJson(sample);
+      const body = bodyFromSample(undefined, fallbackSchema, components);
       if (body) {
         responses.push({ code: "200", description: "Success", body });
       }

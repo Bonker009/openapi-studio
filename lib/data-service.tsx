@@ -158,6 +158,63 @@ export async function restoreVersion(id: string, ts: string) {
   return response.json();
 }
 
+export type EndpointNoteEntry = {
+  id: number;
+  specId: string;
+  path: string;
+  method: string;
+  ts: number;
+  kind: string;
+  body: string;
+};
+
+export async function listEndpointNotes(
+  specId: string,
+  path: string,
+  method: string
+): Promise<EndpointNoteEntry[]> {
+  const base = getRequestBaseUrl();
+  const q = new URLSearchParams({
+    id: specId,
+    path,
+    method,
+  });
+  const response = await fetch(`${base}/api/data/endpoint-notes?${q}`);
+  if (!response.ok) throw new Error("Failed to load endpoint notes");
+  const data = await response.json();
+  return data.notes ?? [];
+}
+
+export async function appendEndpointNote(
+  specId: string,
+  path: string,
+  method: string,
+  noteBody: string,
+  kind = "note"
+): Promise<EndpointNoteEntry> {
+  const base = getRequestBaseUrl();
+  const response = await fetch(`${base}/api/data/endpoint-notes`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ id: specId, path, method, noteBody, kind }),
+  });
+  if (!response.ok) throw new Error("Failed to add note");
+  const data = await response.json();
+  return data.note;
+}
+
+export async function deleteEndpointNote(
+  specId: string,
+  noteId: number
+): Promise<void> {
+  const base = getRequestBaseUrl();
+  const q = new URLSearchParams({ id: specId, noteId: String(noteId) });
+  const response = await fetch(`${base}/api/data/endpoint-notes?${q}`, {
+    method: "DELETE",
+  });
+  if (!response.ok) throw new Error("Failed to delete note");
+}
+
 export async function deleteVersion(id: string, ts: string) {
   const base = getRequestBaseUrl();
   const response = await fetch(

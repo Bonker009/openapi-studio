@@ -18,21 +18,21 @@ export function highlightJsonText(raw: string): ReactNode[] {
     if (!part) return null;
     if (part.startsWith('"')) {
       return (
-        <span key={i} className="text-teal-700">
+        <span key={i} className="text-success">
           {part}
         </span>
       );
     }
     if (/^-?\d/.test(part)) {
       return (
-        <span key={i} className="text-violet-700">
+        <span key={i} className="text-method-patch-foreground">
           {part}
         </span>
       );
     }
     if (part === "true" || part === "false" || part === "null") {
       return (
-        <span key={i} className="text-amber-700">
+        <span key={i} className="text-warning">
           {part}
         </span>
       );
@@ -52,13 +52,13 @@ export function highlightJsonText(raw: string): ReactNode[] {
 export function highlightJsonHtml(raw: string): string {
   const text = escapeHtml(raw);
   return text
-    .replace(/("(?:\\.|[^"\\])*")/g, '<span class="text-teal-700">$1</span>')
+    .replace(/("(?:\\.|[^"\\])*")/g, '<span class="text-success">$1</span>')
     .replace(
       /\b(-?\d+(?:\.\d+)?(?:[eE][+-]?\d+)?)\b/g,
-      '<span class="text-violet-700">$1</span>'
+      '<span class="text-method-patch-foreground">$1</span>'
     )
     .replace(
       /\b(true|false|null)\b/g,
-      '<span class="text-amber-700">$1</span>'
+      '<span class="text-warning">$1</span>'
     );
 }

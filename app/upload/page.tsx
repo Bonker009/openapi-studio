@@ -194,7 +194,7 @@ function UploadPageContent() {
         />
       )}
 
-      <main className="container mx-auto py-8 px-4 max-w-3xl">
+      <main id="main-content" className="container mx-auto py-8 px-4 max-w-3xl">
         <div className="grid gap-6">
           <Card className="shadow-sm">
             <CardHeader>
@@ -248,6 +248,8 @@ function UploadPageContent() {
             </CardHeader>
             <CardContent>
               <div
+                role="group"
+                aria-describedby="file-upload-hint"
                 className={`border-2 border-dashed rounded-xl p-12 text-center mb-6 transition-colors ${
                   isDragging
                     ? "border-primary/50 bg-primary/5"
@@ -258,7 +260,7 @@ function UploadPageContent() {
                 onDrop={handleDrop}
               >
                 <Upload className="mx-auto h-12 w-12 text-muted-foreground" />
-                <p className="mt-3 text-sm text-muted-foreground">
+                <p id="file-upload-hint" className="mt-3 text-sm text-muted-foreground">
                   Drag and drop your OpenAPI file, or browse
                 </p>
                 <input

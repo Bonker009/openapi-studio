@@ -28,27 +28,27 @@ export const DIFF_KIND_STYLES: Record<
 > = {
   added: {
     label: "Added",
-    dot: "bg-teal-500",
-    pill: "bg-teal-50 text-teal-800 border-teal-200",
-    pathNew: "bg-teal-50 border-teal-200/60",
+    dot: "bg-success",
+    pill: "bg-success/10 text-success border-success/30",
+    pathNew: "bg-success/10 border-success/30",
   },
   removed: {
     label: "Removed",
-    dot: "bg-red-500",
-    pill: "bg-red-50 text-red-800 border-red-200",
-    pathOld: "bg-red-50 border-red-200/60",
+    dot: "bg-destructive",
+    pill: "bg-destructive/10 text-destructive border-destructive/30",
+    pathOld: "bg-destructive/10 border-destructive/30",
   },
   changed: {
     label: "Changed",
-    dot: "bg-amber-500",
-    pill: "bg-amber-50 text-amber-800 border-amber-200",
+    dot: "bg-warning",
+    pill: "bg-warning/10 text-warning border-warning/30",
   },
   moved: {
     label: "Moved",
-    dot: "bg-sky-500",
-    pill: "bg-sky-50 text-sky-800 border-sky-200",
+    dot: "bg-info",
+    pill: "bg-info/10 text-info border-info/30",
     pathOld: "bg-muted border-border",
-    pathNew: "bg-sky-50 border-sky-200/60",
+    pathNew: "bg-info/10 border-info/30",
   },
 };
 

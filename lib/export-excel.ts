@@ -1,4 +1,4 @@
-import ExcelJS from "exceljs";
+import type ExcelJS from "exceljs";
 
 export type ExportColumn = {
   id: string;
@@ -150,6 +150,7 @@ export async function downloadExcel(
   rows: Record<string, unknown>[],
   columns: ExportColumn[]
 ): Promise<void> {
+  const ExcelJS = (await import("exceljs")).default;
   const safeName = filename.endsWith(".xlsx") ? filename : `${filename}.xlsx`;
 
   const workbook = new ExcelJS.Workbook();

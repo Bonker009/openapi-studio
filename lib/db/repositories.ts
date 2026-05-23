@@ -1,11 +1,12 @@
-import { and, desc, eq } from "drizzle-orm";
-import type { DiffSummary } from "@/lib/openapi-diff";
+import { and, desc, eq, sql } from "drizzle-orm";
+import { normalizeDiffSummary, type DiffSummary } from "@/lib/openapi-diff";
 import { getDb } from "./client";
 import {
   specs,
   specVersions,
   endpointStatuses,
   specSettings,
+  endpointNotes,
 } from "./schema";
 import { runMigrations } from "./migrate";
 
@@ -52,7 +53,7 @@ function rowToHistoryEntry(row: {
     version: row.version,
     note: row.note ?? undefined,
     summary: row.summaryJson
-      ? (parseJson(row.summaryJson) as DiffSummary)
+      ? normalizeDiffSummary(parseJson(row.summaryJson))
       : undefined,
     isRestore: row.isRestore ?? undefined,
   };
@@ -188,28 +189,46 @@ export type SpecListItem = {
 
 export function listSpecSummaries(): SpecListItem[] {
   ensureMigrated();
-  const rows = getDb().select().from(specs).all();
+  const rows = getDb()
+    .select({
+      id: specs.id,
+      updatedAt: specs.updatedAt,
+      openapiJson: specs.openapiJson,
+      title: sql<string | null>`json_extract(${specs.openapiJson}, '$.info.title')`,
+      version: sql<string | null>`json_extract(${specs.openapiJson}, '$.info.version')`,
+      description: sql<string | null>`json_extract(${specs.openapiJson}, '$.info.description')`,
+    })
+    .from(specs)
+    .all();
+
   return rows.map((row) => {
-    try {
-      const data = parseJson<{
-        info?: { title?: string; version?: string; description?: string };
-      }>(row.openapiJson);
-      const description = data.info?.description?.trim();
-      return {
-        id: row.id,
-        title: data.info?.title || row.id,
-        description: description || undefined,
-        version: data.info?.version || "unknown",
-        lastModified: new Date(row.updatedAt).toISOString(),
-      };
-    } catch {
-      return {
-        id: row.id,
-        title: row.id,
-        version: "unknown",
-        lastModified: new Date(row.updatedAt).toISOString(),
-      };
+    let title = row.title?.trim() || null;
+    let version = row.version?.trim() || null;
+    let description = row.description?.trim() || undefined;
+
+    if (!title || !version) {
+      try {
+        const data = parseJson<{
+          info?: { title?: string; version?: string; description?: string };
+        }>(row.openapiJson);
+        title = title || data.info?.title?.trim() || null;
+        version = version || data.info?.version?.trim() || null;
+        if (!description) {
+          const d = data.info?.description?.trim();
+          if (d) description = d;
+        }
+      } catch {
+        /* use fallbacks below */
+      }
     }
+
+    return {
+      id: row.id,
+      title: title || row.id,
+      description,
+      version: version || "unknown",
+      lastModified: new Date(row.updatedAt).toISOString(),
+    };
   });
 }
 
@@ -299,4 +318,77 @@ export function saveSpecSettings(id: string, data: SpecSettingsData): void {
 export function deleteSpecSettings(id: string): void {
   ensureMigrated();
   getDb().delete(specSettings).where(eq(specSettings.specId, id)).run();
+}
+
+export type EndpointNoteRow = {
+  id: number;
+  specId: string;
+  path: string;
+  method: string;
+  ts: number;
+  kind: string;
+  body: string;
+};
+
+export function listEndpointNotes(
+  specId: string,
+  path: string,
+  method: string
+): EndpointNoteRow[] {
+  ensureMigrated();
+  const methodLower = method.toLowerCase();
+  return getDb()
+    .select()
+    .from(endpointNotes)
+    .where(
+      and(
+        eq(endpointNotes.specId, specId),
+        eq(endpointNotes.path, path),
+        eq(endpointNotes.method, methodLower)
+      )
+    )
+    .orderBy(desc(endpointNotes.ts))
+    .all();
+}
+
+export function appendEndpointNote(
+  specId: string,
+  path: string,
+  method: string,
+  input: { body: string; kind?: string }
+): EndpointNoteRow {
+  ensureMigrated();
+  const ts = Date.now();
+  const methodLower = method.toLowerCase();
+  const db = getDb();
+  const result = db
+    .insert(endpointNotes)
+    .values({
+      specId,
+      path,
+      method: methodLower,
+      ts,
+      kind: input.kind?.trim() || "note",
+      body: input.body.trim(),
+    })
+    .returning()
+    .get();
+  return result;
+}
+
+export function deleteEndpointNote(specId: string, noteId: number): boolean {
+  ensureMigrated();
+  const db = getDb();
+  const row = db
+    .select({ id: endpointNotes.id })
+    .from(endpointNotes)
+    .where(
+      and(eq(endpointNotes.specId, specId), eq(endpointNotes.id, noteId))
+    )
+    .get();
+  if (!row) return false;
+  db.delete(endpointNotes)
+    .where(and(eq(endpointNotes.specId, specId), eq(endpointNotes.id, noteId)))
+    .run();
+  return true;
 }

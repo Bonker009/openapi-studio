@@ -255,8 +255,8 @@ export function ApiTester({
   const sharedProps = {
     getStatusBadgeColor: (status: number | null) => {
       if (!status) return "bg-gray-100 text-gray-800";
-      if (status >= 200 && status < 300) return "bg-green-100 text-green-800";
-      if (status >= 400 && status < 500) return "bg-red-100 text-red-800";
+      if (status >= 200 && status < 300) return "bg-success/10 text-success";
+      if (status >= 400 && status < 500) return "bg-destructive/10 text-destructive";
       if (status >= 500) return "bg-orange-100 text-orange-800";
       return "bg-blue-100 text-blue-800";
     },

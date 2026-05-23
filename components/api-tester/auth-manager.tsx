@@ -90,7 +90,7 @@ export function AuthManager({
                 {Object.entries(authOptions).map(([name, token]) => (
                   <div
                     key={name}
-                    className="flex items-center justify-between p-2 bg-slate-100 rounded-md"
+                    className="flex items-center justify-between p-2 bg-muted rounded-md"
                   >
                     <div>
                       <div className="font-medium">{name}</div>
@@ -113,7 +113,7 @@ export function AuthManager({
                       <Button
                         variant="ghost"
                         size="sm"
-                        className="bg-red-400 hover:bg-red-500 text-white"
+                        className="bg-red-400 hover:bg-destructive text-white"
                         onClick={() => removeAuthToken(name)}
                       >
                         <XCircle className="h-4 w-4" />
@@ -154,7 +154,7 @@ export function AuthManager({
               />
             </div>
             <Button
-              className="mt-2 bg-red-400 hover:bg-red-500"
+              className="mt-2 bg-red-400 hover:bg-destructive"
               size="sm"
               onClick={addAuthToken}
               disabled={!newTokenName.trim() || !newTokenValue.trim()}

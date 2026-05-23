@@ -4,6 +4,13 @@ import {
   performHttpRequest,
 } from "@/lib/playground/perform-http-request-server";
 import {
+  isProxyMetaField,
+  PROXY_HEADERS_FIELD,
+  PROXY_METHOD_FIELD,
+  PROXY_RAW_BODY_FIELD,
+  PROXY_URL_FIELD,
+} from "@/lib/playground/proxy-fields";
+import {
   ALLOWED_HTTP_METHODS,
   filterOutboundHeaders,
   MAX_PROXY_BODY_BYTES,
@@ -22,69 +29,129 @@ type ProxyBody = {
   body?: string;
 };
 
-export async function POST(req: NextRequest) {
-  const authError = checkRouteAuth(req);
-  if (authError) return authError;
+function proxyError(message: string, status = 400) {
+  return NextResponse.json(
+    { status: 0, error: message, data: null, headers: {}, responseTime: 0 },
+    { status }
+  );
+}
 
-  if (!isPlaygroundProxyEnabled()) {
-    return NextResponse.json(
-      {
-        status: 0,
-        error: "Playground proxy is disabled",
-        data: null,
-        headers: {},
-        responseTime: 0,
-      },
-      { status: 403 }
-    );
+function stripContentType(headers: Record<string, string>): Record<string, string> {
+  const out = { ...headers };
+  for (const key of Object.keys(out)) {
+    if (key.toLowerCase() === "content-type") {
+      delete out[key];
+    }
   }
+  return out;
+}
 
-  let payload: ProxyBody;
+async function measureFormDataSize(form: FormData): Promise<number> {
+  let total = 0;
+  for (const [, value] of form.entries()) {
+    if (value instanceof File) {
+      total += value.size;
+    } else {
+      total += new TextEncoder().encode(String(value)).length;
+    }
+    if (total > MAX_PROXY_BODY_BYTES) {
+      throw new Error(`Request body exceeds ${MAX_PROXY_BODY_BYTES} bytes`);
+    }
+  }
+  return total;
+}
+
+async function handleMultipartProxy(req: NextRequest) {
+  let form: FormData;
   try {
-    payload = (await req.json()) as ProxyBody;
+    form = await req.formData();
   } catch {
-    return NextResponse.json(
-      {
-        status: 0,
-        error: "Invalid JSON body",
-        data: null,
-        headers: {},
-        responseTime: 0,
-      },
-      { status: 400 }
-    );
+    return proxyError("Invalid multipart body");
   }
 
-  const url = payload.url?.trim();
+  try {
+    await measureFormDataSize(form);
+  } catch (e) {
+    const message = e instanceof Error ? e.message : "Body too large";
+    return proxyError(message);
+  }
+
+  const url = form.get(PROXY_URL_FIELD)?.toString().trim();
   if (!url) {
-    return NextResponse.json(
-      {
-        status: 0,
-        error: "URL is required",
-        data: null,
-        headers: {},
-        responseTime: 0,
-      },
-      { status: 400 }
-    );
+    return proxyError("URL is required");
   }
 
   try {
     await assertSafeOutboundUrl(url);
   } catch (e) {
     const message = e instanceof SsrfError ? e.message : "URL not allowed";
-    return NextResponse.json(
-      { status: 0, error: message, data: null, headers: {}, responseTime: 0 },
-      { status: 400 }
-    );
+    return proxyError(message);
+  }
+
+  const method = (form.get(PROXY_METHOD_FIELD)?.toString() ?? "GET").toUpperCase();
+  if (!ALLOWED_HTTP_METHODS.has(method)) {
+    return proxyError("HTTP method not allowed");
+  }
+
+  let headers: Record<string, string> = {};
+  const headersRaw = form.get(PROXY_HEADERS_FIELD)?.toString();
+  if (headersRaw) {
+    try {
+      const parsed = JSON.parse(headersRaw) as Record<string, string>;
+      headers = filterOutboundHeaders(parsed);
+    } catch {
+      return proxyError("Invalid proxy headers JSON");
+    }
+  }
+
+  const rawBody = form.get(PROXY_RAW_BODY_FIELD);
+  const options: RequestInit = {
+    method,
+    headers: stripContentType(headers),
+  };
+
+  if (!["GET", "HEAD"].includes(method)) {
+    if (rawBody instanceof File) {
+      options.body = rawBody;
+    } else {
+      const outgoing = new FormData();
+      for (const [key, value] of form.entries()) {
+        if (isProxyMetaField(key)) continue;
+        outgoing.append(key, value);
+      }
+      options.body = outgoing;
+    }
+  }
+
+  const result = await performHttpRequest(normalizeRequestUrl(url), options, {
+    skipSsrfCheck: true,
+  });
+  return NextResponse.json(result);
+}
+
+async function handleJsonProxy(req: NextRequest) {
+  let payload: ProxyBody;
+  try {
+    payload = (await req.json()) as ProxyBody;
+  } catch {
+    return proxyError("Invalid JSON body");
+  }
+
+  const url = payload.url?.trim();
+  if (!url) {
+    return proxyError("URL is required");
+  }
+
+  try {
+    await assertSafeOutboundUrl(url);
+  } catch (e) {
+    const message = e instanceof SsrfError ? e.message : "URL not allowed";
+    return proxyError(message);
   }
 
   const method = (payload.method ?? "GET").toUpperCase();
   if (!ALLOWED_HTTP_METHODS.has(method)) {
-    return NextResponse.json(
-      { status: 0, error: "HTTP method not allowed", data: null, headers: {}, responseTime: 0 },
-      { status: 400 }
-    );
+    return proxyError("HTTP method not allowed");
   }
 
   let body: string | undefined;
@@ -92,10 +159,7 @@ export async function POST(req: NextRequest) {
     body = readBodyWithLimit(payload.body, MAX_PROXY_BODY_BYTES);
   } catch (e) {
     const message = e instanceof Error ? e.message : "Body too large";
-    return NextResponse.json(
-      { status: 0, error: message, data: null, headers: {}, responseTime: 0 },
-      { status: 400 }
-    );
+    return proxyError(message);
   }
 
   const headers = filterOutboundHeaders(payload.headers ?? {});
@@ -113,4 +177,29 @@ export async function POST(req: NextRequest) {
     skipSsrfCheck: true,
   });
   return NextResponse.json(result);
+}
+
+export async function POST(req: NextRequest) {
+  const authError = checkRouteAuth(req);
+  if (authError) return authError;
+
+  if (!isPlaygroundProxyEnabled()) {
+    return NextResponse.json(
+      {
+        status: 0,
+        error: "Playground proxy is disabled",
+        data: null,
+        headers: {},
+        responseTime: 0,
+      },
+      { status: 403 }
+    );
+  }
+
+  const contentType = req.headers.get("content-type") ?? "";
+  if (contentType.includes("multipart/form-data")) {
+    return handleMultipartProxy(req);
+  }
+
+  return handleJsonProxy(req);
 }

@@ -1,11 +1,11 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Copy, Check, ChevronDown, ChevronUp } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { JsonResponseView } from "@/components/playground/json-response-view";
+import { JsonResponseViewLazy } from "@/components/playground/json-response-view-lazy";
 import {
   byteSizeLabel,
   formatJsonBody,
@@ -19,7 +19,7 @@ type BodyView = "tree" | "raw";
 
 function RawBodyBlock({ code }: { code: string }) {
   return (
-    <div className="rounded-lg border border-border bg-slate-50 overflow-hidden">
+    <div className="rounded-lg border border-border bg-muted/40 overflow-hidden">
       <pre className="p-4 text-xs font-mono leading-relaxed whitespace-pre-wrap wrap-break-word text-foreground">
         {code}
       </pre>
@@ -36,13 +36,22 @@ type ResponseViewerProps = {
   embedded?: boolean;
 };
 
+function statusCategory(code: number | null): string {
+  if (code == null) return "";
+  if (code >= 200 && code < 300) return "Success";
+  if (code >= 300 && code < 400) return "Redirect";
+  if (code >= 400 && code < 500) return "Client error";
+  if (code >= 500) return "Server error";
+  return "Informational";
+}
+
 function statusVariant(code: number | null) {
   if (code == null) return "";
   if (code >= 200 && code < 300)
-    return "bg-teal-50 text-teal-800 border-teal-200";
+    return "bg-success/10 text-success border-success/30";
   if (code >= 400)
     return "bg-destructive/10 text-destructive border-destructive/20";
-  return "bg-amber-50 text-amber-800 border-amber-200";
+  return "bg-warning/10 text-warning border-warning/30";
 }
 
 export function ResponseViewer({
@@ -56,6 +65,11 @@ export function ResponseViewer({
   const [showHeaders, setShowHeaders] = useState(false);
   const [copied, setCopied] = useState(false);
   const [bodyView, setBodyView] = useState<BodyView>("tree");
+  const [expandAll, setExpandAll] = useState(false);
+
+  useEffect(() => {
+    setExpandAll(false);
+  }, [body]);
 
   const copyBody = async () => {
     if (!body) return;
@@ -95,11 +109,11 @@ export function ResponseViewer({
   return (
     <div
       className={cn(
-        "flex flex-col flex-1 min-h-0 bg-white",
+        "flex flex-col flex-1 min-h-0 bg-card",
         !embedded && "border-t border-border"
       )}
     >
-      <div className="shrink-0 flex flex-wrap items-center gap-2 px-4 py-2 border-b border-border bg-white">
+      <div className="shrink-0 flex flex-wrap items-center gap-2 px-4 py-2 border-b border-border bg-card">
         {!embedded && (
           <span className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
             Response
@@ -110,6 +124,7 @@ export function ResponseViewer({
             variant="outline"
             className={cn("tabular-nums text-xs", statusVariant(status))}
           >
+            <span className="sr-only">{statusCategory(status)}: </span>
             {status}
           </Badge>
         )}
@@ -130,7 +145,7 @@ export function ResponseViewer({
               type="button"
               variant={effectiveView === "tree" ? "secondary" : "ghost"}
               size="sm"
-              className="h-6 px-2 text-[10px] rounded-sm"
+              className="h-7 px-2 text-[10px] rounded-sm"
               onClick={() => setBodyView("tree")}
             >
               Tree
@@ -139,12 +154,24 @@ export function ResponseViewer({
               type="button"
               variant={effectiveView === "raw" ? "secondary" : "ghost"}
               size="sm"
-              className="h-6 px-2 text-[10px] rounded-sm"
+              className="h-7 px-2 text-[10px] rounded-sm"
               onClick={() => setBodyView("raw")}
             >
               Raw
             </Button>
           </div>
+        )}
+
+        {hasBody && canShowTree && effectiveView === "tree" && (
+          <Button
+            type="button"
+            variant={expandAll ? "secondary" : "ghost"}
+            size="sm"
+            className="h-7 text-xs"
+            onClick={() => setExpandAll((v) => !v)}
+          >
+            {expandAll ? "Collapse all" : "Expand all"}
+          </Button>
         )}
 
         <div className="ml-auto flex items-center gap-1">
@@ -182,19 +209,22 @@ export function ResponseViewer({
       </div>
 
       {showHeaders && headersParsed && (
-        <div className="shrink-0 border-b border-border px-3 py-2 bg-white max-h-52 overflow-y-auto">
-          <JsonResponseView value={headersParsed} />
+        <div className="shrink-0 border-b border-border px-3 py-2 bg-card max-h-52 overflow-y-auto">
+          <JsonResponseViewLazy value={headersParsed} expandAll />
         </div>
       )}
 
-      <ScrollArea className="flex-1 min-h-[200px] bg-white">
+      <ScrollArea className="flex-1 min-h-[200px] bg-card">
         <div className="p-3 min-h-[200px]">
           {isPlaceholder ? (
             <p className="text-xs text-muted-foreground text-center py-12">
               {displayBody}
             </p>
           ) : effectiveView === "tree" && canShowTree ? (
-            <JsonResponseView value={parsedBody} />
+            <JsonResponseViewLazy
+              value={parsedBody}
+              expandAll={expandAll}
+            />
           ) : (
             <RawBodyBlock code={displayBody} />
           )}
@@ -202,4 +232,5 @@ export function ResponseViewer({
       </ScrollArea>
     </div>
   );
-};
+}
+

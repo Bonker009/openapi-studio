@@ -332,7 +332,7 @@ export function TestCaseManager({
               {Object.entries(groupTestCasesByTitle(testCases)).map(
                 ([title, cases]) => (
                   <div key={title} className="space-y-1">
-                    <div className="font-medium text-sm bg-slate-200 p-1 px-2 rounded-md">
+                    <div className="font-medium text-sm bg-muted p-1 px-2 rounded-md">
                       {title} <Badge variant="outline">{cases.length}</Badge>
                     </div>
 
@@ -340,7 +340,7 @@ export function TestCaseManager({
                       {cases.map((testCase) => (
                         <div
                           key={testCase.id}
-                          className="flex items-center justify-between p-2 bg-slate-100 hover:bg-slate-200 transition-colors rounded-md"
+                          className="flex items-center justify-between p-2 bg-muted hover:bg-muted transition-colors rounded-md"
                         >
                           <div className="flex-1">
                             <div className="font-medium flex items-center">
@@ -350,11 +350,11 @@ export function TestCaseManager({
                                   testCase.request.method === "GET"
                                     ? "bg-blue-100 text-blue-800"
                                     : testCase.request.method === "POST"
-                                    ? "bg-green-100 text-green-800"
+                                    ? "bg-success/10 text-success"
                                     : testCase.request.method === "PUT"
                                     ? "bg-yellow-100 text-yellow-800"
                                     : testCase.request.method === "DELETE"
-                                    ? "bg-red-100 text-red-800"
+                                    ? "bg-destructive/10 text-destructive"
                                     : "bg-gray-100 text-gray-800"
                                 )}
                               >
@@ -411,7 +411,7 @@ export function TestCaseManager({
             </div>
           </ScrollArea>
         ) : (
-          <div className="border rounded-md p-8 text-center bg-slate-50">
+          <div className="border rounded-md p-8 text-center bg-muted/40">
             <p className="text-muted-foreground">No saved test cases</p>
             <p className="text-sm text-muted-foreground mt-1">
               Save your current request as a test case to get started
@@ -481,7 +481,7 @@ export function TestCaseManager({
               <Button
                 size="sm"
                 onClick={() => setShowTestCaseForm(true)}
-                className="flex items-center bg-red-400 hover:bg-red-500"
+                className="flex items-center bg-red-400 hover:bg-destructive"
               >
                 <Plus className="h-3 w-3 mr-1" />
                 Save Current Request

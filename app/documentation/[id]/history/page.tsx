@@ -151,7 +151,7 @@ function HistoryPageContent() {
         specId={id}
       />
 
-      <main className="container mx-auto py-8 px-4 max-w-screen-2xl">
+      <main id="main-content" className="container mx-auto py-8 px-4 max-w-screen-2xl">
         <div className="flex flex-wrap gap-2 mb-6">
           <Button variant="outline" asChild>
             <Link href={`/documentation/${id}`}>Back to docs</Link>
@@ -260,6 +260,7 @@ function HistoryPageContent() {
                             variant="ghost"
                             className="h-7 w-7 text-destructive shrink-0"
                             onClick={() => handleDeleteVersion(entry.ts)}
+                            aria-label={`Delete version ${entry.version}`}
                           >
                             <Trash2 className="h-3 w-3" />
                           </Button>

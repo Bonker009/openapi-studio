@@ -17,6 +17,7 @@ import { SlidersHorizontal } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import {
   DropdownMenu,
   DropdownMenuCheckboxItem,
@@ -28,6 +29,7 @@ import {
 import {
   Table,
   TableBody,
+  TableCaption,
   TableCell,
   TableHead,
   TableHeader,
@@ -131,7 +133,7 @@ export function EndpointsDataTable({
   return (
     <Card className="shadow-sm">
       <CardHeader className="pb-3">
-        <CardTitle>Endpoints</CardTitle>
+        <CardTitle as="h2">Endpoints</CardTitle>
         <CardDescription className="tabular-nums">
           Showing {table.getFilteredRowModel().rows.length} of {data.length}{" "}
           endpoints
@@ -139,7 +141,11 @@ export function EndpointsDataTable({
       </CardHeader>
       <CardContent className="space-y-4">
         <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center">
+          <Label htmlFor="endpoints-table-search" className="sr-only">
+            Search endpoints
+          </Label>
           <Input
+            id="endpoints-table-search"
             placeholder="Search path, operation ID, controller…"
             value={globalFilter}
             onChange={(e) => setGlobalFilter(e.target.value)}
@@ -218,11 +224,27 @@ export function EndpointsDataTable({
         <div className="rounded-md border overflow-hidden">
           <div className="max-h-[min(70vh,800px)] overflow-auto">
             <Table>
+              <TableCaption className="sr-only">
+                Endpoints for this API specification
+              </TableCaption>
               <TableHeader className="sticky top-0 z-10 bg-card">
                 {table.getHeaderGroups().map((headerGroup) => (
                   <TableRow key={headerGroup.id}>
                     {headerGroup.headers.map((header) => (
-                      <TableHead key={header.id} className="whitespace-nowrap">
+                      <TableHead
+                        key={header.id}
+                        scope="col"
+                        aria-sort={
+                          header.column.getCanSort()
+                            ? header.column.getIsSorted() === "asc"
+                              ? "ascending"
+                              : header.column.getIsSorted() === "desc"
+                                ? "descending"
+                                : "none"
+                            : undefined
+                        }
+                        className="whitespace-nowrap"
+                      >
                         {header.isPlaceholder
                           ? null
                           : flexRender(

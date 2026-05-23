@@ -1,14 +1,20 @@
 "use client";
 
+import { useMemo } from "react";
 import { JSONTree } from "react-json-tree";
+import {
+  countJsonNodes,
+  JSON_TREE_AUTO_EXPAND_NODE_LIMIT,
+} from "@/lib/playground/count-json-nodes";
 import { cn } from "@/lib/utils";
 
 type JsonResponseViewProps = {
   value: Record<string, unknown> | unknown[];
   className?: string;
+  /** When true, expand every node (user toggled "Expand all"). */
+  expandAll?: boolean;
 };
 
-/** Postman-style tree — full values, all nodes expanded by default. */
 const treeTheme = {
   base00: "#f8fafc",
   base01: "#f1f5f9",
@@ -28,20 +34,46 @@ const treeTheme = {
   base0F: "#c2410c",
 };
 
-export function JsonResponseView({ value, className }: JsonResponseViewProps) {
+export function JsonResponseView({
+  value,
+  className,
+  expandAll = false,
+}: JsonResponseViewProps) {
+  const autoExpandSmall = useMemo(() => {
+    const count = countJsonNodes(
+      value,
+      JSON_TREE_AUTO_EXPAND_NODE_LIMIT + 1
+    );
+    return count <= JSON_TREE_AUTO_EXPAND_NODE_LIMIT;
+  }, [value]);
+
+  const shouldExpandNodeInitially = useMemo(() => {
+    if (expandAll) {
+      return () => true;
+    }
+    if (autoExpandSmall) {
+      return () => true;
+    }
+    return (_keyPath: readonly (string | number)[], _data: unknown, level: number) =>
+      level <= 2;
+  }, [expandAll, autoExpandSmall]);
+
   return (
     <div
+      role="region"
+      aria-label="Response body"
       className={cn(
-        "rounded-lg border border-border bg-slate-50 overflow-auto p-3 text-xs font-mono",
+        "rounded-lg border border-border bg-muted/40 overflow-auto p-3 text-xs font-mono",
         className
       )}
     >
       <JSONTree
+        key={expandAll ? "expand-all" : autoExpandSmall ? "expand-small" : "expand-partial"}
         data={value}
         theme={treeTheme}
         invertTheme={false}
         hideRoot={false}
-        shouldExpandNodeInitially={() => true}
+        shouldExpandNodeInitially={shouldExpandNodeInitially}
         getItemString={(_type, _data, _itemType, itemString) => (
           <span className="text-muted-foreground text-[11px] ml-1">
             {itemString}
@@ -51,14 +83,14 @@ export function JsonResponseView({ value, className }: JsonResponseViewProps) {
           <span
             className={cn(
               "font-medium",
-              expandable ? "text-sky-800" : "text-sky-700"
+              expandable ? "text-info" : "text-info/80"
             )}
           >
             {key}:
           </span>
         )}
         valueRenderer={(_display, raw) => (
-          <span className="text-amber-900 break-all whitespace-pre-wrap">
+          <span className="text-warning break-all whitespace-pre-wrap">
             {typeof raw === "string" ? JSON.stringify(raw) : String(raw)}
           </span>
         )}

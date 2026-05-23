@@ -108,13 +108,21 @@ export function EnvironmentSwitcher({
 
   const addForm = (
     <div className="space-y-2">
+      <Label htmlFor="env-add-name" className="text-xs">
+        Environment name
+      </Label>
       <Input
-        placeholder="Name (e.g. Staging)"
+        id="env-add-name"
+        placeholder="e.g. Staging"
         value={customName}
         onChange={(e) => setCustomName(e.target.value)}
         className="h-8 text-sm"
       />
+      <Label htmlFor="env-add-url" className="text-xs">
+        Base URL
+      </Label>
       <Input
+        id="env-add-url"
         placeholder="https://api.example.com"
         value={customUrl}
         onChange={(e) => setCustomUrl(e.target.value)}
@@ -140,8 +148,11 @@ export function EnvironmentSwitcher({
     return (
       <div className="flex items-center gap-2 min-w-0">
         <Globe className="h-4 w-4 text-primary shrink-0 hidden sm:block" />
+        <Label htmlFor="env-navbar-select" className="sr-only">
+          Environment
+        </Label>
         <Select value={activeId} onValueChange={handleSelect}>
-          <SelectTrigger className="h-8 w-[min(200px,40vw)] text-xs">
+          <SelectTrigger id="env-navbar-select" className="h-8 w-[min(200px,40vw)] text-xs">
             <SelectValue placeholder="Environment" />
           </SelectTrigger>
           <SelectContent align="end">

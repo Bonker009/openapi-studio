@@ -4,6 +4,7 @@ import {
   integer,
   uniqueIndex,
   primaryKey,
+  index,
 } from "drizzle-orm/sqlite-core";
 
 export const specs = sqliteTable("specs", {
@@ -55,3 +56,26 @@ export const specSettings = sqliteTable("spec_settings", {
     .notNull()
     .default("{}"),
 });
+
+export const endpointNotes = sqliteTable(
+  "endpoint_notes",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    specId: text("spec_id")
+      .notNull()
+      .references(() => specs.id, { onDelete: "cascade" }),
+    path: text("path").notNull(),
+    method: text("method").notNull(),
+    ts: integer("ts").notNull(),
+    kind: text("kind").notNull().default("note"),
+    body: text("body").notNull(),
+  },
+  (table) => [
+    index("endpoint_notes_lookup").on(
+      table.specId,
+      table.path,
+      table.method,
+      table.ts
+    ),
+  ]
+);

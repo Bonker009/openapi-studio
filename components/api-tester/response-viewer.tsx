@@ -94,13 +94,13 @@ export function ResponseViewer({
 
     if (status >= 200 && status < 300) {
       return {
-        color: "bg-green-100 text-green-800",
+        color: "bg-success/10 text-success",
         icon: CheckCircle2,
         text: "Success",
       };
     } else if (status >= 400 && status < 500) {
       return {
-        color: "bg-red-100 text-red-800",
+        color: "bg-destructive/10 text-destructive",
         icon: AlertCircle,
         text: "Client Error",
       };
@@ -125,15 +125,15 @@ export function ResponseViewer({
   // Calculate response time color
   const getTimeColor = (time: number | null) => {
     if (!time) return "bg-gray-100";
-    if (time < 100) return "bg-green-500";
-    if (time < 300) return "bg-green-400";
+    if (time < 100) return "bg-success";
+    if (time < 300) return "bg-success";
     if (time < 500) return "bg-yellow-400";
     if (time < 1000) return "bg-orange-500";
-    return "bg-red-500";
+    return "bg-destructive";
   };
 
   return (
-    <Card className="shadow-sm border-slate-200 h-full">
+    <Card className="shadow-sm border-border h-full">
       <CardHeader className="pb-2">
         <div className="flex items-center justify-between">
           <CardTitle className="text-lg flex items-center gap-2">
@@ -146,15 +146,17 @@ export function ResponseViewer({
                   )}`}
                 />
               ) : (
-                <FileJson className="h-4 w-4 mr-2 text-slate-500" />
+                <FileJson className="h-4 w-4 mr-2 text-muted-foreground" />
               )}
               Response
             </div>
             <Button
               variant="ghost"
               size="sm"
-              className="h-6 w-6 p-0 rounded-full"
+              className="h-7 w-7 p-0 rounded-full"
               onClick={() => setExpanded(!expanded)}
+              aria-expanded={expanded}
+              aria-label={expanded ? "Collapse response" : "Expand response"}
             >
               {expanded ? (
                 <ChevronUp className="h-4 w-4" />
@@ -170,14 +172,14 @@ export function ResponseViewer({
                 <Tooltip>
                   <TooltipTrigger asChild>
                     <div className="flex items-center text-xs">
-                      <Clock className="h-3 w-3 mr-1 text-slate-500" />
+                      <Clock className="h-3 w-3 mr-1 text-muted-foreground" />
                       <span>{responseTime}ms</span>
                     </div>
                   </TooltipTrigger>
                   <TooltipContent side="bottom">
                     <div className="text-xs">
                       <p className="font-medium mb-1">Response Time</p>
-                      <div className="w-full bg-slate-100 h-2 rounded-full overflow-hidden">
+                      <div className="w-full bg-muted h-2 rounded-full overflow-hidden">
                         <div
                           className={`h-full ${getTimeColor(responseTime)}`}
                           style={{
@@ -238,7 +240,7 @@ export function ResponseViewer({
               <TooltipProvider>
                 <Tooltip>
                   <TooltipTrigger asChild>
-                    <div className="text-xs text-slate-500 flex items-center">
+                    <div className="text-xs text-muted-foreground flex items-center">
                       <FileText className="h-3 w-3 mr-1" />
                       {responseSize < 1024
                         ? `${responseSize} B`
@@ -312,7 +314,7 @@ export function ResponseViewer({
                         size="sm"
                         className={`h-7 px-2 ${
                           copied === "body"
-                            ? "bg-green-50 text-green-700 border-green-200"
+                            ? "bg-success/10 text-success border-success/30"
                             : "bg-white/80 backdrop-blur-sm"
                         }`}
                         onClick={() => handleCopy(responseBody, "body")}
@@ -332,7 +334,7 @@ export function ResponseViewer({
                     )}
                   </div>
 
-                  <div className="bg-slate-50 border rounded-md overflow-hidden">
+                  <div className="bg-muted/40 border rounded-md overflow-hidden">
                     {isJsonView ? (
                       <SyntaxHighlighter
                         language="json"
@@ -363,7 +365,7 @@ export function ResponseViewer({
                         size="sm"
                         className={`h-7 px-2 ${
                           copied === "headers"
-                            ? "bg-green-50 text-green-700 border-green-200"
+                            ? "bg-success/10 text-success border-success/30"
                             : "bg-white/80 backdrop-blur-sm"
                         }`}
                         onClick={() =>
@@ -389,14 +391,14 @@ export function ResponseViewer({
                   )}
 
                   {Object.keys(responseHeaders).length > 0 ? (
-                    <div className="bg-slate-50 border rounded-md p-4 overflow-x-auto h-[350px]">
+                    <div className="bg-muted/40 border rounded-md p-4 overflow-x-auto h-[350px]">
                       <table className="min-w-full">
                         <thead>
-                          <tr className="border-b border-slate-200">
-                            <th className="text-left text-xs uppercase font-medium text-slate-500 pb-3 pr-6">
+                          <tr className="border-b border-border">
+                            <th className="text-left text-xs uppercase font-medium text-muted-foreground pb-3 pr-6">
                               Name
                             </th>
-                            <th className="text-left text-xs uppercase font-medium text-slate-500 pb-3">
+                            <th className="text-left text-xs uppercase font-medium text-muted-foreground pb-3">
                               Value
                             </th>
                           </tr>
@@ -406,12 +408,12 @@ export function ResponseViewer({
                             ([key, value], index) => (
                               <tr
                                 key={index}
-                                className="hover:bg-slate-100/50 transition-colors"
+                                className="hover:bg-muted/50 transition-colors"
                               >
-                                <td className="py-3 pr-6 text-sm font-medium text-slate-700 align-top whitespace-nowrap">
+                                <td className="py-3 pr-6 text-sm font-medium text-foreground align-top whitespace-nowrap">
                                   {key}
                                 </td>
-                                <td className="py-3 text-sm text-slate-600 break-all">
+                                <td className="py-3 text-sm text-muted-foreground break-all">
                                   {value}
                                 </td>
                               </tr>
@@ -421,8 +423,8 @@ export function ResponseViewer({
                       </table>
                     </div>
                   ) : (
-                    <div className="bg-slate-50 border rounded-md p-4 h-[350px] flex flex-col items-center justify-center text-slate-500">
-                      <Info className="h-10 w-10 mb-2 text-slate-300" />
+                    <div className="bg-muted/40 border rounded-md p-4 h-[350px] flex flex-col items-center justify-center text-muted-foreground">
+                      <Info className="h-10 w-10 mb-2 text-muted-foreground" />
                       <p className="text-center">
                         No response headers available
                       </p>
@@ -436,20 +438,20 @@ export function ResponseViewer({
             </Tabs>
           </CardContent>
 
-          <CardFooter className="pt-0 pb-3 px-6 flex justify-between text-xs text-slate-500 border-t mt-2 pt-3">
+          <CardFooter className="pt-0 pb-3 px-6 flex justify-between text-xs text-muted-foreground border-t mt-2 pt-3">
             <div className="flex items-center">
               {responseStatus && responseTime && (
                 <>
                   <Badge
                     variant="outline"
                     className={cn(
-                      "mr-2 bg-slate-50 border-slate-200",
+                      "mr-2 bg-muted/40 border-border",
                       responseStatus >= 200 &&
                         responseStatus < 300 &&
-                        "bg-green-50 border-green-200 text-green-700",
+                        "bg-green-50 border-success/30 text-green-700",
                       responseStatus >= 400 &&
                         responseStatus < 500 &&
-                        "bg-red-50 border-red-200 text-red-700",
+                        "bg-red-50 border-destructive/30 text-red-700",
                       responseStatus >= 500 &&
                         "bg-orange-50 border-orange-200 text-orange-700"
                     )}

@@ -14,8 +14,13 @@ import {
 } from "@/components/ui/accordion";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
-import type { DiffKind, DiffSummary } from "@/lib/openapi-diff";
-import { diffIsEmpty, formatDiffCounts } from "@/lib/openapi-diff";
+import type { DiffKind, DiffSummary, Severity, SeverityFilter } from "@/lib/openapi-diff";
+import {
+  diffIsEmpty,
+  formatDiffCounts,
+  formatSeverityCounts,
+} from "@/lib/openapi-diff";
+import { SeverityCountsToggle } from "@/components/diff/severity-counts";
 import { DiffCounts } from "@/components/diff/diff-counts";
 import {
   DiffEndpointCard,
@@ -24,6 +29,10 @@ import {
 
 const ALL_KINDS: DiffKind[] = ["added", "removed", "changed", "moved"];
 const UNCATEGORIZED = "Other";
+
+function rowSeverity(row: DiffRow): Severity {
+  return row.data.severity;
+}
 
 function buildRows(summary: DiffSummary): DiffRow[] {
   const rows: DiffRow[] = [];
@@ -87,12 +96,21 @@ export function DiffView({
 }: DiffViewProps) {
   const [search, setSearch] = useState("");
   const [selectedKinds, setSelectedKinds] = useState<DiffKind[]>(ALL_KINDS);
+  const [selectedSeverities, setSelectedSeverities] = useState<SeverityFilter[]>(
+    []
+  );
 
   const filteredGroups = useMemo(() => {
     if (!summary) return [];
     const q = search.trim().toLowerCase();
     const rows = buildRows(summary).filter((row) => {
       if (!selectedKinds.includes(row.kind)) return false;
+      if (
+        selectedSeverities.length > 0 &&
+        !selectedSeverities.includes(rowSeverity(row))
+      ) {
+        return false;
+      }
       if (q && !rowSearchText(row).includes(q)) return false;
       return true;
     });
@@ -110,7 +128,7 @@ export function DiffView({
       if (b === UNCATEGORIZED) return -1;
       return a.localeCompare(b);
     });
-  }, [summary, search, selectedKinds]);
+  }, [summary, search, selectedKinds, selectedSeverities]);
 
   if (loading) {
     return (
@@ -167,6 +185,11 @@ export function DiffView({
       <CardHeader className={embedded ? "pb-3 space-y-3 px-0" : "pb-3 space-y-3"}>
         <div className="flex flex-wrap items-center gap-2">
           <span className="text-sm font-medium">{formatDiffCounts(summary)}</span>
+          {formatSeverityCounts(summary) && (
+            <span className="text-xs text-muted-foreground">
+              {formatSeverityCounts(summary)}
+            </span>
+          )}
           {showSuggestedBump && (
             <Badge variant="info" className="capitalize">
               Suggested {summary.suggestedBump} bump
@@ -180,6 +203,11 @@ export function DiffView({
           summary={summary}
           selected={selectedKinds}
           onSelectedChange={setSelectedKinds}
+        />
+        <SeverityCountsToggle
+          counts={summary.severityCounts}
+          selected={selectedSeverities}
+          onSelectedChange={setSelectedSeverities}
         />
         <div className="relative">
           <Search className="absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />

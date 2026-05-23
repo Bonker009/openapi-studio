@@ -16,7 +16,8 @@ import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import type { DiffSummary } from "@/lib/openapi-diff";
-import { formatDiffCounts } from "@/lib/openapi-diff";
+import { formatDiffCounts, formatSeverityCounts } from "@/lib/openapi-diff";
+import { SeverityBadge } from "@/components/diff/severity-badge";
 import { DiffView } from "@/components/diff/diff-view";
 
 type ChangeReviewDialogProps = {
@@ -57,6 +58,15 @@ export function ChangeReviewDialog({
           <SheetDescription asChild>
             <div className="flex flex-wrap items-center gap-2 pt-1">
               <span>{formatDiffCounts(summary)}</span>
+              {formatSeverityCounts(summary) && (
+                <>
+                  <span className="text-muted-foreground">—</span>
+                  <span className="text-xs">{formatSeverityCounts(summary)}</span>
+                </>
+              )}
+              {summary.worstSeverity === "breaking" && (
+                <SeverityBadge severity="breaking" />
+              )}
               <span className="text-muted-foreground">—</span>
               <span className="text-muted-foreground">suggested</span>
               <Badge variant="info" className="capitalize">
