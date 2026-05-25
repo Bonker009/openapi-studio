@@ -1,10 +1,79 @@
 # api-spector
 
-Interactive API playground for Spring Boot applications. Add one dependency, open `/api-spector`, and explore every `@RestController` endpoint with try-it requests, smoke tests, and OpenAPI 3.1 schemas generated from your Jackson DTOs.
+Interactive API playground for Spring Boot 3.x. Add one dependency, run your app, open **`/api-spector`**, and explore every `@RestController` endpoint with try-it requests, smoke tests, Excel/OpenAPI export, and OpenAPI 3.1 schemas from your Jackson DTOs.
 
 No database. No springdoc. No Swagger annotations required.
 
-## Maven
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+
+---
+
+## Install from GitHub (JitPack)
+
+Add the JitPack repository and depend on the **starter** module (replace `VERSION` with a [GitHub release tag](https://github.com/Bonker009/list-endpoints/tags), e.g. `v0.1.0`):
+
+**Maven**
+
+```xml
+<repositories>
+  <repository>
+    <id>jitpack.io</id>
+    <url>https://jitpack.io</url>
+  </repository>
+</repositories>
+
+<dependency>
+  <groupId>com.github.Bonker009.list-endpoints</groupId>
+  <artifactId>api-spector-spring-boot-starter</artifactId>
+  <version>VERSION</version>
+</dependency>
+```
+
+After tagging, confirm the build at [jitpack.io/#Bonker009/list-endpoints](https://jitpack.io/#Bonker009/list-endpoints) and use the snippet JitPack prints for that tag.
+
+**Gradle (Kotlin DSL)**
+
+```kotlin
+repositories {
+    mavenCentral()
+    maven("https://jitpack.io")
+}
+
+dependencies {
+    implementation("com.github.Bonker009.list-endpoints:api-spector-spring-boot-starter:VERSION")
+}
+```
+
+**Gradle (Groovy)**
+
+```groovy
+repositories {
+    mavenCentral()
+    maven { url 'https://jitpack.io' }
+}
+
+dependencies {
+    implementation 'com.github.Bonker009.list-endpoints:api-spector-spring-boot-starter:VERSION'
+}
+```
+
+---
+
+## Install from source (local Maven)
+
+Clone this repo and install the libraries into your local `~/.m2` repository:
+
+```bash
+git clone https://github.com/Bonker009/list-endpoints.git
+cd list-endpoints
+
+npm ci --prefix apps/api-spector-spa
+npm run build --prefix apps/api-spector-spa
+
+mvn -f maven/pom.xml clean install -DskipTests
+```
+
+Then use the published coordinates (no extra repository):
 
 ```xml
 <dependency>
@@ -14,21 +83,35 @@ No database. No springdoc. No Swagger annotations required.
 </dependency>
 ```
 
-## Gradle (Kotlin DSL)
-
-```kotlin
-implementation("io.github.bonker009:api-spector-spring-boot-starter:0.1.0")
-```
-
-> **Maven Central:** After the first release is published, this coordinate resolves from Central with no extra repository. See [docs/PUBLISHING.md](docs/PUBLISHING.md) to publish new versions.
+---
 
 ## Quick start
 
-1. Add the dependency above to your Spring Boot 3.x app.
-2. Run the application.
-3. Open `http://localhost:8080/api-spector`.
+1. Add the dependency (JitPack or local install).
+2. Run your Spring Boot 3.x application.
+3. Open **`http://localhost:8080/api-spector`**.
 
-OpenAPI JSON is served at `/api-spector/api-docs`, built by scanning `RequestMappingHandlerMapping` and reflecting request/response types with [victools/jsonschema-generator](https://github.com/victools/jsonschema-generator).
+On startup you should see logs like:
+
+```text
+api-spector playground: http://localhost:8080/api-spector
+api-spector OpenAPI:   http://localhost:8080/api-spector/api-docs
+api-spector proxy:     http://localhost:8080/api-spector/proxy
+```
+
+| URL | Description |
+|-----|-------------|
+| `/api-spector` | Playground UI |
+| `/api-spector/api-docs` | OpenAPI 3.1 JSON (scanned from your controllers) |
+| `/api-spector/proxy` | Built-in try-it proxy |
+
+Try the sample app in this repo:
+
+```bash
+mvn -f maven/sample-consumer spring-boot:run
+```
+
+---
 
 ## Configuration
 
@@ -37,7 +120,6 @@ apispector:
   enabled: true                    # false to disable; auto-off on prod profile if unset
   production-profiles: prod,production
   path: /api-spector
-  api-docs-url: /api-spector/api-docs
   try-it-enabled: true             # false = read-only docs in UI
   filter: true
   doc-expansion: list              # list | full | none
@@ -53,38 +135,55 @@ apispector:
     exclude-path-patterns: []
 ```
 
-See [docs/CONSUMER.md](docs/CONSUMER.md) for the full property list and production checklist.
+Full reference: [docs/CONSUMER.md](docs/CONSUMER.md)
+
+---
+
+## Features
+
+- OpenAPI 3.1 from Spring MVC mappings + Jackson DTOs ([victools](https://github.com/victools/jsonschema-generator))
+- Try-it panel with built-in same-origin proxy
+- Smoke tests, Excel / OpenAPI / Postman export
+- Production gate: auto-disable on `prod` profile, optional HTTP Basic auth
+- Deep linking, sidebar search, configurable doc expansion
+
+---
 
 ## Repository layout
 
 | Path | Description |
 |------|-------------|
 | `apps/api-spector-spa/` | Vite + React UI (WebJar source) |
-| `maven/api-spector-scanner/` | Spring MVC annotation → OpenAPI 3.1 scanner |
-| `maven/api-spector-webjar/` | Packages SPA into `META-INF/resources/webjars/api-spector/` |
-| `maven/api-spector-spring-boot-starter/` | Auto-configuration + UI + api-docs endpoints |
-| `maven/sample-consumer/` | Example Spring Boot app + integration tests |
+| `maven/api-spector-scanner/` | Spring MVC → OpenAPI scanner |
+| `maven/api-spector-webjar/` | Packages SPA into the WebJar |
+| `maven/api-spector-spring-boot-starter/` | Spring Boot auto-configuration |
+| `maven/sample-consumer/` | Example app + integration tests |
 
-## Build from source
+---
+
+## Build & test
+
+Requires **Node.js 22+** and **Java 17+**.
 
 ```bash
-# UI
-cd apps/api-spector-spa && npm install && npm run build
-
-# Java modules + tests
+npm ci --prefix apps/api-spector-spa
+npm run build --prefix apps/api-spector-spa
 mvn -f maven/pom.xml clean verify
 ```
 
-Or from the repo root (requires Node.js and Maven):
+---
 
-```bash
-npm install --prefix apps/api-spector-spa
-npm run build
-```
+## Releases on GitHub
 
-```bash
-mvn -f maven/pom.xml clean verify
-```
+1. Ensure [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md) is up to date (`npm run licenses:report --prefix apps/api-spector-spa` if npm deps changed).
+2. Tag a version: `git tag v0.1.0 && git push origin v0.1.0`
+3. Create a **GitHub Release** from that tag with release notes.
+4. JitPack will build `com.github.Bonker009.list-endpoints:…:v0.1.0` — check https://jitpack.io/#Bonker009/list-endpoints
+
+Maintainer notes: [docs/GITHUB.md](docs/GITHUB.md)  
+Maven Central (optional): [docs/PUBLISHING.md](docs/PUBLISHING.md)
+
+---
 
 ## Standalone SPA embed
 
@@ -102,19 +201,10 @@ The built bundle exposes `window.ApiSpector.init(options)`:
 </script>
 ```
 
-## Publishing
-
-Maintainers: [docs/PUBLISHING.md](docs/PUBLISHING.md) — Sonatype Central, GPG, `mvn deploy -Prelease`, GitHub tag workflow.
+---
 
 ## License
 
-MIT — see [LICENSE](LICENSE).
+**MIT** — see [LICENSE](LICENSE).
 
-Third-party attributions (bundled UI font, npm dependencies, Java libraries): [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).  
-Published JARs include `META-INF/NOTICE`, `META-INF/THIRD_PARTY_NOTICES.md`, and `META-INF/licenses/`.
-
-Regenerate the npm license CSV after SPA dependency changes:
-
-```bash
-npm run licenses:report --prefix apps/api-spector-spa
-```
+Bundled UI font and npm dependencies: [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md) (also shipped under `META-INF/` in published JARs).

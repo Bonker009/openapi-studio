@@ -1,0 +1,6 @@
+jdk:
+  - openjdk17
+before_install:
+  - cd apps/api-spector-spa && npm ci && npm run build
+install:
+  - cd maven && mvn install -B -DskipTests -pl api-spector-scanner,api-spector-webjar,api-spector-spring-boot-starter -am
