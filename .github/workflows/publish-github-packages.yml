@@ -1,0 +1,47 @@
+name: Publish to GitHub Packages
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: apps/api-spector-spa/package-lock.json
+
+      - name: Install SPA dependencies
+        working-directory: apps/api-spector-spa
+        run: npm ci
+
+      - name: Build SPA
+        working-directory: apps/api-spector-spa
+        run: npm run build
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+          cache: maven
+          server-id: github
+          server-username: ${{ github.actor }}
+          server-password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Deploy to GitHub Packages
+        run: >
+          mvn -f maven/pom.xml -Pgithub-publish deploy
+          -pl api-spector-scanner,api-spector-webjar,api-spector-spring-boot-starter
+          -am
+          -B

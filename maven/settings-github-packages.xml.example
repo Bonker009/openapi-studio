@@ -1,0 +1,16 @@
+<!--
+  Copy to ~/.m2/settings.xml (merge with existing <settings>), or use:
+  mvn -s maven/settings-github-packages.xml.example ...
+
+  Create a GitHub PAT: Settings -> Developer settings -> Personal access tokens
+  Scopes: read:packages (consumers), write:packages (publishers)
+-->
+<settings>
+  <servers>
+    <server>
+      <id>github</id>
+      <username>YOUR_GITHUB_USERNAME</username>
+      <password>YOUR_GITHUB_PAT</password>
+    </server>
+  </servers>
+</settings>

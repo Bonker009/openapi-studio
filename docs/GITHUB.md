@@ -1,109 +1,125 @@
-# Publishing on GitHub
+# Publish with GitHub Packages (Apache Maven)
 
-This project is set up to distribute via **GitHub + JitPack** (no Maven Central required).
+Artifacts are published to:
+
+**`https://maven.pkg.github.com/Bonker009/list-endpoints`**
+
+Coordinates stay **`io.github.bonker009`** (no JitPack).
 
 ---
 
-## What users need
+## One-time: enable Packages on the repo
 
-After you tag a release, consumers add JitPack and depend on:
+1. Push this repo to GitHub (`Bonker009/list-endpoints`).
+2. After the first publish, open **GitHub → your profile → Packages** (or the repo **Packages** tab).
+3. Open package **`api-spector-spring-boot-starter`** → **Package settings** → set visibility to **Public** if you want anyone to download without repo access.
+
+---
+
+## Publish from branch `maven/gradle` (step by step)
+
+### 1. Commit and push your branch
+
+```bash
+cd path/to/list-endpoints
+git checkout maven/gradle
+
+git add .
+git status
+git commit -m "Prepare v0.1.0 for GitHub Packages"
+git push origin maven/gradle
+```
+
+### 2. Tag the release (on this branch)
+
+```bash
+git tag v0.1.0
+git push origin v0.1.0
+```
+
+The tag must point to the commit you want to release (usually the latest on `maven/gradle`).
+
+### 3. GitHub Actions publishes the JARs
+
+Pushing tag `v0.1.0` runs [`.github/workflows/publish-github-packages.yml`](../.github/workflows/publish-github-packages.yml):
+
+- Builds the SPA
+- Runs `mvn deploy` to GitHub Packages (scanner, webjar, starter)
+
+Check: **Actions** tab → **Publish to GitHub Packages** → green check.
+
+### 4. Create a GitHub Release (optional but recommended)
+
+1. https://github.com/Bonker009/list-endpoints/releases  
+2. **Draft a new release** → tag **`v0.1.0`**  
+3. Add release notes → **Publish release**
+
+### 5. Publish manually (without Actions)
+
+From repo root, with a PAT in `~/.m2/settings.xml` (see [settings-github-packages.xml.example](../maven/settings-github-packages.xml.example)):
+
+```bash
+npm ci --prefix apps/api-spector-spa
+npm run build --prefix apps/api-spector-spa
+
+mvn -f maven/pom.xml -Pgithub-publish deploy \
+  -pl api-spector-scanner,api-spector-webjar,api-spector-spring-boot-starter \
+  -am
+```
+
+Server **`id`** must be **`github`** (matches `distributionManagement` in `maven/pom.xml`).
+
+---
+
+## What consumers add
+
+GitHub Packages uses the **same `github` server id** in Maven settings (PAT with `read:packages`).
+
+**`~/.m2/settings.xml`**
 
 ```xml
-<repository>
-  <id>jitpack.io</id>
-  <url>https://jitpack.io</url>
-</repository>
+<settings>
+  <servers>
+    <server>
+      <id>github</id>
+      <username>YOUR_GITHUB_USERNAME</username>
+      <password>YOUR_GITHUB_PAT</password>
+    </server>
+  </servers>
+</settings>
+```
+
+**`pom.xml`**
+
+```xml
+<repositories>
+  <repository>
+    <id>github</id>
+    <url>https://maven.pkg.github.com/Bonker009/list-endpoints</url>
+  </repository>
+</repositories>
 
 <dependency>
-  <groupId>com.github.Bonker009.list-endpoints</groupId>
+  <groupId>io.github.bonker009</groupId>
   <artifactId>api-spector-spring-boot-starter</artifactId>
-  <version>v0.1.0</version>
+  <version>0.1.0</version>
 </dependency>
 ```
 
-See the [README](../README.md) for Gradle and fallback coordinates.
+**Gradle (Kotlin DSL)** — add PAT via `gradle.properties` or env; see [GitHub docs](https://docs.github.com/en/packages/working-with-a-github-packages-registry/working-with-the-apache-maven-registry).
 
 ---
 
-## Release checklist
-
-### 1. Version bump (when needed)
-
-Update `0.1.0` in:
-
-- `maven/pom.xml` (parent + `<scm><tag>`)
-- Child module parent versions if not inherited
-- README / CONSUMER examples
-
-### 2. Legal / notices
+## Legal / notices before publish
 
 ```bash
 npm run licenses:report --prefix apps/api-spector-spa
 ```
 
-Commit `licenses/npm-production.csv` if it changed.
-
-### 3. Build & test
-
-```bash
-npm ci --prefix apps/api-spector-spa
-npm run build --prefix apps/api-spector-spa
-mvn -f maven/pom.xml clean verify
-```
-
-### 4. Tag and push
-
-```bash
-git add .
-git commit -m "Release v0.1.0"
-git tag v0.1.0
-git push origin main
-git push origin v0.1.0
-```
-
-### 5. GitHub Release
-
-On https://github.com/Bonker009/list-endpoints/releases:
-
-- **Create a new release** from tag `v0.1.0`
-- Title: `v0.1.0`
-- Describe changes (features, fixes, breaking changes)
-
-Optional: attach `api-spector-spring-boot-starter-0.1.0.jar` from  
-`maven/api-spector-spring-boot-starter/target/` for users who prefer manual download.
-
-### 6. Verify JitPack
-
-1. Open https://jitpack.io/#Bonker009/list-endpoints
-2. Enter tag `v0.1.0` → **Get it**
-3. Wait for green build log
-4. Use the dependency snippet JitPack shows (module `api-spector-spring-boot-starter`)
-
-`jitpack.yml` in the repo root runs:
-
-- `npm ci && npm run build` in the SPA
-- `mvn install` for scanner, webjar, and starter (skips `sample-consumer`)
+See [THIRD_PARTY_NOTICES.md](../THIRD_PARTY_NOTICES.md).
 
 ---
 
-## Install locally (no JitPack)
+## Maven Central (optional, no GitHub repo block)
 
-For development or private use:
-
-```bash
-mvn -f maven/pom.xml clean install -DskipTests
-```
-
-Coordinates: `io.github.bonker009:api-spector-spring-boot-starter:0.1.0`
-
----
-
-## GitHub Packages (alternative)
-
-If you prefer artifacts on `maven.pkg.github.com` instead of JitPack, add `distributionManagement` and a workflow with `GITHUB_TOKEN`. Consumers need a GitHub PAT and an extra `<repository>` block. JitPack is simpler for public open source.
-
----
-
-## Maven Central (optional)
-
-For `search.maven.org` and a single dependency line with no JitPack repo, follow [PUBLISHING.md](PUBLISHING.md).
+For `search.maven.org` only, follow [PUBLISHING.md](PUBLISHING.md) instead of GitHub Packages.
