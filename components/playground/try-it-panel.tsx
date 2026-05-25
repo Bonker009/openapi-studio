@@ -9,6 +9,7 @@ import {
   Copy,
   Check,
   Lock,
+  LockOpen,
   RotateCcw,
   AlignLeft,
 } from "lucide-react";
@@ -113,7 +114,7 @@ export function TryItPanel({
   const [curlOpen, setCurlOpen] = useState(false);
   const [curlCopied, setCurlCopied] = useState(false);
   const [urlCopied, setUrlCopied] = useState(false);
-  const [activeTab, setActiveTab] = useState("params");
+  const [activeTab, setActiveTab] = useState("request");
   const skipOriginPreserveRef = useRef(false);
 
   const methodData = useMemo(() => {
@@ -205,7 +206,7 @@ export function TryItPanel({
     setResponseBody("");
     setResponseHeaders({});
     resetSampleBody();
-    setActiveTab("params");
+    setActiveTab("request");
   }, [endpoint, methodData, headerParams, resetSampleBody]);
 
   const syncRequestUrlFromParams = useCallback(() => {
@@ -552,6 +553,7 @@ export function TryItPanel({
 
   const authWarning =
     endpoint.requiresAuth && !credentialRequiresAuth(activeCredential);
+  const authSatisfied = credentialRequiresAuth(activeCredential);
 
   return (
     <div
@@ -578,12 +580,18 @@ export function TryItPanel({
               {operationLabel}
             </span>
           )}
-          {endpoint.requiresAuth && (
-            <Lock
-              className="h-3.5 w-3.5 text-muted-foreground shrink-0"
-              aria-label="Requires authentication"
-            />
-          )}
+          {endpoint.requiresAuth &&
+            (authSatisfied ? (
+              <LockOpen
+                className="h-3.5 w-3.5 shrink-0 text-success"
+                aria-label="Authentication applied"
+              />
+            ) : (
+              <Lock
+                className="h-3.5 w-3.5 shrink-0 text-muted-foreground"
+                aria-label="Requires authentication"
+              />
+            ))}
         </div>
         <div className="flex items-center gap-2 min-w-0">
           <span className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground shrink-0">
@@ -632,11 +640,11 @@ export function TryItPanel({
           className="flex-1 min-h-0 flex flex-col gap-0 px-6 pt-4 bg-card"
         >
           <TabsList className="h-9 shrink-0 w-fit mb-3">
-            <TabsTrigger value="params" className="text-xs">
-              Parameters
-            </TabsTrigger>
             <TabsTrigger value="request" className="text-xs">
               Request
+            </TabsTrigger>
+            <TabsTrigger value="samples" className="text-xs">
+              Samples
             </TabsTrigger>
             <TabsTrigger value="response" className="text-xs">
               Response
@@ -644,7 +652,7 @@ export function TryItPanel({
           </TabsList>
 
           <TabsContent
-            value="params"
+            value="request"
             className="flex-1 min-h-0 overflow-y-auto mt-0 space-y-4 data-[state=inactive]:hidden"
           >
             {pathParams.length > 0 && (
@@ -678,13 +686,7 @@ export function TryItPanel({
                   This operation has no parameters.
                 </p>
               )}
-            <OperationSamples samples={operationSamples} />
-          </TabsContent>
 
-          <TabsContent
-            value="request"
-            className="flex-1 min-h-0 overflow-y-auto mt-0 space-y-4 data-[state=inactive]:hidden"
-          >
             {authWarning && (
               <div className="rounded-lg border border-warning/30 bg-warning/10 px-3 py-2 text-xs text-warning">
                 This endpoint requires a Bearer token. Add or select a role token
@@ -817,6 +819,19 @@ export function TryItPanel({
                 </pre>
               </CollapsibleContent>
             </Collapsible>
+          </TabsContent>
+
+          <TabsContent
+            value="samples"
+            className="flex-1 min-h-0 overflow-y-auto mt-0 data-[state=inactive]:hidden"
+          >
+            {operationSamples ? (
+              <OperationSamples samples={operationSamples} standalone />
+            ) : (
+              <p className="text-xs text-muted-foreground">
+                No samples in the spec for this operation.
+              </p>
+            )}
           </TabsContent>
 
           <TabsContent

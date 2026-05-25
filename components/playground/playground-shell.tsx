@@ -8,7 +8,10 @@ import {
   extractPlaygroundEndpoints,
   type PlaygroundEndpoint,
 } from "@/lib/playground/endpoints";
-import type { Credential } from "@/lib/playground/credentials";
+import {
+  credentialRequiresAuth,
+  type Credential,
+} from "@/lib/playground/credentials";
 
 type PlaygroundShellProps = {
   specId: string;
@@ -70,6 +73,8 @@ export function PlaygroundShell({
     if (first) setSelected(first);
   };
 
+  const authSatisfied = credentialRequiresAuth(activeCredential);
+
   return (
     <>
       <PlaygroundHeader
@@ -89,9 +94,11 @@ export function PlaygroundShell({
       <main id="main-content" className="flex flex-1 min-h-0 overflow-hidden">
         <div className="w-1/2 min-w-0 shrink-0 border-r border-border bg-card flex flex-col min-h-0">
           <EndpointList
+            specId={specId}
             endpoints={endpoints}
             selected={selected}
             onSelect={setSelected}
+            authSatisfied={authSatisfied}
           />
         </div>
         <div className="w-1/2 min-w-0 min-h-0 overflow-hidden bg-card flex flex-col">

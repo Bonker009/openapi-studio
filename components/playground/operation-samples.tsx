@@ -80,24 +80,32 @@ function SampleBlock({
 
 type OperationSamplesProps = {
   samples: OperationSamples | null;
+  /** When true, omit top border (dedicated Samples tab). */
+  standalone?: boolean;
 };
 
-export function OperationSamples({ samples }: OperationSamplesProps) {
+export function OperationSamples({
+  samples,
+  standalone = false,
+}: OperationSamplesProps) {
   if (!samples) return null;
 
   const hasRequestBody = Boolean(samples.requestBody?.trim());
   const hasResponses = samples.responses.length > 0;
+  const rootClass = standalone
+    ? "space-y-4"
+    : "space-y-4 border-t border-border pt-4";
 
   if (!hasRequestBody && !hasResponses) {
     return (
-      <div className="space-y-3 pt-4 border-t border-border">
+      <div className={standalone ? "space-y-3" : "space-y-3 border-t border-border pt-4"}>
         <SampleBlock title="Sample request URL" code={samples.requestUrl} mono={false} />
       </div>
     );
   }
 
   return (
-    <div className="space-y-4 pt-4 border-t border-border">
+    <div className={rootClass}>
       <SampleBlock title="Sample request URL" code={samples.requestUrl} mono={false} />
 
       {hasRequestBody && (
