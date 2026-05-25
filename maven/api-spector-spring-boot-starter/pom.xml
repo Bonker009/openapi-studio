@@ -5,21 +5,86 @@
   <modelVersion>4.0.0</modelVersion>
 
   <parent>
-    <groupId>io.github.apispector</groupId>
+    <groupId>io.github.bonker009</groupId>
     <artifactId>api-spector-parent</artifactId>
-    <version>0.1.0-SNAPSHOT</version>
+    <version>0.1.0</version>
   </parent>
 
   <artifactId>api-spector-spring-boot-starter</artifactId>
   <name>api-spector-spring-boot-starter</name>
 
+  <build>
+    <resources>
+      <resource>
+        <directory>src/main/resources</directory>
+        <filtering>true</filtering>
+        <includes>
+          <include>META-INF/api-spector/**</include>
+        </includes>
+      </resource>
+      <resource>
+        <directory>src/main/resources</directory>
+        <filtering>false</filtering>
+        <excludes>
+          <exclude>META-INF/api-spector/**</exclude>
+        </excludes>
+      </resource>
+    </resources>
+    <plugins>
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-resources-plugin</artifactId>
+        <version>3.3.1</version>
+        <executions>
+          <execution>
+            <id>copy-legal-notices</id>
+            <phase>generate-resources</phase>
+            <goals>
+              <goal>copy-resources</goal>
+            </goals>
+            <configuration>
+              <outputDirectory>${project.build.outputDirectory}/META-INF</outputDirectory>
+              <resources>
+                <resource>
+                  <directory>${project.basedir}/../..</directory>
+                  <includes>
+                    <include>NOTICE</include>
+                    <include>THIRD_PARTY_NOTICES.md</include>
+                  </includes>
+                </resource>
+                <resource>
+                  <directory>${project.basedir}/../../licenses</directory>
+                  <targetPath>licenses</targetPath>
+                  <includes>
+                    <include>**/*</include>
+                  </includes>
+                </resource>
+              </resources>
+            </configuration>
+          </execution>
+        </executions>
+      </plugin>
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-jar-plugin</artifactId>
+        <configuration>
+          <archive>
+            <manifestEntries>
+              <Implementation-Version>${project.version}</Implementation-Version>
+            </manifestEntries>
+          </archive>
+        </configuration>
+      </plugin>
+    </plugins>
+  </build>
+
   <dependencies>
     <dependency>
-      <groupId>io.github.apispector</groupId>
+      <groupId>io.github.bonker009</groupId>
       <artifactId>api-spector-scanner</artifactId>
     </dependency>
     <dependency>
-      <groupId>io.github.apispector</groupId>
+      <groupId>io.github.bonker009</groupId>
       <artifactId>api-spector-webjar</artifactId>
     </dependency>
     <dependency>

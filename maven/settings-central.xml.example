@@ -1,0 +1,21 @@
+<!--
+  Copy relevant sections to ~/.m2/settings.xml (do not commit secrets).
+  See docs/PUBLISHING.md
+-->
+<settings>
+  <servers>
+    <server>
+      <id>central</id>
+      <username>YOUR_CENTRAL_TOKEN_USERNAME</username>
+      <password>YOUR_CENTRAL_TOKEN_PASSWORD</password>
+    </server>
+  </servers>
+  <profiles>
+    <profile>
+      <id>central-release</id>
+      <properties>
+        <gpg.keyname>YOUR_GPG_KEY_ID</gpg.keyname>
+      </properties>
+    </profile>
+  </profiles>
+</settings>

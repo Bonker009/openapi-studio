@@ -3,6 +3,9 @@ package io.github.apispector.starter;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.github.apispector.scanner.ApiSpectorScanProperties;
 import io.github.apispector.scanner.ApiSpectorScanner;
+import java.io.IOException;
+import java.io.InputStream;
+import java.nio.charset.StandardCharsets;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.boot.autoconfigure.AutoConfiguration;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnClass;
@@ -29,9 +32,25 @@ public class ApiSpectorAutoConfiguration implements WebMvcConfigurer {
 
     public ApiSpectorAutoConfiguration(ApiSpectorProperties properties) {
         this.properties = properties;
+        this.webjarVersion = resolveWebjarVersion();
+    }
+
+    private static String resolveWebjarVersion() {
+        try (InputStream in =
+                ApiSpectorAutoConfiguration.class.getResourceAsStream(
+                    "/META-INF/api-spector/webjar-version.txt")) {
+            if (in != null) {
+                String version = new String(in.readAllBytes(), StandardCharsets.UTF_8).trim();
+                if (!version.isEmpty() && !version.contains("@")) {
+                    return version;
+                }
+            }
+        } catch (IOException ignored) {
+            // fall through
+        }
         Package pkg = ApiSpectorAutoConfiguration.class.getPackage();
-        String implVersion = pkg.getImplementationVersion();
-        this.webjarVersion = implVersion != null ? implVersion : "0.1.0-SNAPSHOT";
+        String implVersion = pkg != null ? pkg.getImplementationVersion() : null;
+        return implVersion != null && !implVersion.isBlank() ? implVersion : "0.1.0";
     }
 
     @Bean

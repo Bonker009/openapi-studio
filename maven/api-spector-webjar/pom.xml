@@ -5,9 +5,9 @@
   <modelVersion>4.0.0</modelVersion>
 
   <parent>
-    <groupId>io.github.apispector</groupId>
+    <groupId>io.github.bonker009</groupId>
     <artifactId>api-spector-parent</artifactId>
-    <version>0.1.0-SNAPSHOT</version>
+    <version>0.1.0</version>
   </parent>
 
   <artifactId>api-spector-webjar</artifactId>
@@ -21,6 +21,32 @@
         <artifactId>maven-resources-plugin</artifactId>
         <version>3.3.1</version>
         <executions>
+          <execution>
+            <id>copy-legal-notices</id>
+            <phase>generate-resources</phase>
+            <goals>
+              <goal>copy-resources</goal>
+            </goals>
+            <configuration>
+              <outputDirectory>${project.build.outputDirectory}/META-INF</outputDirectory>
+              <resources>
+                <resource>
+                  <directory>${project.basedir}/../..</directory>
+                  <includes>
+                    <include>NOTICE</include>
+                    <include>THIRD_PARTY_NOTICES.md</include>
+                  </includes>
+                </resource>
+                <resource>
+                  <directory>${project.basedir}/../../licenses</directory>
+                  <targetPath>licenses</targetPath>
+                  <includes>
+                    <include>**/*</include>
+                  </includes>
+                </resource>
+              </resources>
+            </configuration>
+          </execution>
           <execution>
             <id>copy-spa-dist</id>
             <phase>generate-resources</phase>

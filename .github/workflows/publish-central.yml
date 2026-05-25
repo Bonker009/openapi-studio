@@ -1,0 +1,47 @@
+name: Publish to Maven Central
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: read
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: apps/api-spector-spa/package-lock.json
+
+      - name: Install SPA dependencies
+        working-directory: apps/api-spector-spa
+        run: npm ci
+
+      - name: Build SPA
+        working-directory: apps/api-spector-spa
+        run: npm run build
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+          cache: maven
+          server-id: central
+          server-username: ${{ secrets.CENTRAL_USERNAME }}
+          server-password: ${{ secrets.CENTRAL_PASSWORD }}
+          gpg-private-key: ${{ secrets.GPG_PRIVATE_KEY }}
+          gpg-passphrase: ${{ secrets.GPG_PASSPHRASE }}
+
+      - name: Deploy to Maven Central
+        run: >
+          mvn -f maven/pom.xml -Prelease deploy
+          -pl api-spector-scanner,api-spector-webjar,api-spector-spring-boot-starter
+          -am
+          -B

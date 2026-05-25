@@ -4,9 +4,9 @@
 
 ```xml
 <dependency>
-  <groupId>io.github.apispector</groupId>
+  <groupId>io.github.bonker009</groupId>
   <artifactId>api-spector-spring-boot-starter</artifactId>
-  <version>0.1.0-SNAPSHOT</version>
+  <version>0.1.0</version>
 </dependency>
 ```
 
@@ -14,7 +14,7 @@
 
 ```kotlin
 dependencies {
-    implementation("io.github.apispector:api-spector-spring-boot-starter:0.1.0-SNAPSHOT")
+    implementation("io.github.bonker009:api-spector-spring-boot-starter:0.1.0")
 }
 ```
 
@@ -22,7 +22,7 @@ dependencies {
 
 ```groovy
 dependencies {
-    implementation 'io.github.apispector:api-spector-spring-boot-starter:0.1.0-SNAPSHOT'
+    implementation 'io.github.bonker009:api-spector-spring-boot-starter:0.1.0'
 }
 ```
 
@@ -129,6 +129,12 @@ apispector:
 4. **Network**: Restrict `/api-spector/**` at your reverse proxy or firewall; use IP allowlists on the load balancer if needed.
 
 5. **Do not expose** the built-in proxy to arbitrary target URLs in untrusted environments — it is intended for same-app localhost/dev use.
+
+## License and third-party notices
+
+api-spector is MIT-licensed ([LICENSE](../LICENSE)). The WebJar bundles UI dependencies and **Plus Jakarta Sans** (SIL Open Font License 1.1). See [THIRD_PARTY_NOTICES.md](../THIRD_PARTY_NOTICES.md) or `META-INF/THIRD_PARTY_NOTICES.md` inside the published JAR.
+
+---
 
 ## Modules (advanced)
 

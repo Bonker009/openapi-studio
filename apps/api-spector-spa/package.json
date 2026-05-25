@@ -2,12 +2,14 @@
   "name": "api-spector-spa",
   "version": "0.1.0",
   "private": true,
+  "license": "MIT",
   "type": "module",
   "scripts": {
     "dev": "vite",
     "build": "vite build",
     "preview": "vite preview",
-    "test": "vitest run"
+    "test": "vitest run",
+    "licenses:report": "npx --yes license-checker --production --csv --out ../../licenses/npm-production.csv"
   },
   "dependencies": {
     "@codemirror/autocomplete": "^6.20.2",

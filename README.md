@@ -8,17 +8,19 @@ No database. No springdoc. No Swagger annotations required.
 
 ```xml
 <dependency>
-  <groupId>io.github.apispector</groupId>
+  <groupId>io.github.bonker009</groupId>
   <artifactId>api-spector-spring-boot-starter</artifactId>
-  <version>0.1.0-SNAPSHOT</version>
+  <version>0.1.0</version>
 </dependency>
 ```
 
 ## Gradle (Kotlin DSL)
 
 ```kotlin
-implementation("io.github.apispector:api-spector-spring-boot-starter:0.1.0-SNAPSHOT")
+implementation("io.github.bonker009:api-spector-spring-boot-starter:0.1.0")
 ```
+
+> **Maven Central:** After the first release is published, this coordinate resolves from Central with no extra repository. See [docs/PUBLISHING.md](docs/PUBLISHING.md) to publish new versions.
 
 ## Quick start
 
@@ -100,6 +102,19 @@ The built bundle exposes `window.ApiSpector.init(options)`:
 </script>
 ```
 
+## Publishing
+
+Maintainers: [docs/PUBLISHING.md](docs/PUBLISHING.md) — Sonatype Central, GPG, `mvn deploy -Prelease`, GitHub tag workflow.
+
 ## License
 
-See repository license file.
+MIT — see [LICENSE](LICENSE).
+
+Third-party attributions (bundled UI font, npm dependencies, Java libraries): [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).  
+Published JARs include `META-INF/NOTICE`, `META-INF/THIRD_PARTY_NOTICES.md`, and `META-INF/licenses/`.
+
+Regenerate the npm license CSV after SPA dependency changes:
+
+```bash
+npm run licenses:report --prefix apps/api-spector-spa
+```
