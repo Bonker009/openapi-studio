@@ -1,0 +1,36 @@
+name: build
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: apps/api-spector-spa/package-lock.json
+
+      - name: Install SPA dependencies
+        working-directory: apps/api-spector-spa
+        run: npm ci
+
+      - name: Build SPA
+        working-directory: apps/api-spector-spa
+        run: npm run build
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+          cache: maven
+
+      - name: Maven verify
+        run: mvn -f maven/pom.xml clean verify

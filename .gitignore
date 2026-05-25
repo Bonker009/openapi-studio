@@ -13,12 +13,15 @@
 # testing
 /coverage
 
-# next.js
-/.next/
-/out/
+# vite SPA
+apps/api-spector-spa/dist
+apps/api-spector-spa/node_modules
 
 # production
 /build
+
+# maven
+maven/**/target
 
 # misc
 .DS_Store
@@ -33,14 +36,5 @@ yarn-error.log*
 # env files (can opt-in for committing if needed)
 .env*
 
-# vercel
-.vercel
-
 # typescript
 *.tsbuildinfo
-next-env.d.ts
-
-# sqlite database (persisted via ./data volume)
-data/app.db
-data/app.db-wal
-data/app.db-shm

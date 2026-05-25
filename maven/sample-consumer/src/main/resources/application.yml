@@ -1,0 +1,21 @@
+spring:
+  application:
+    name: Sample API
+
+apispector:
+  info:
+    title: Sample API
+    version: 1.0.0
+  # try-it-enabled: true
+  # filter: true
+  # doc-expansion: list   # list | full | none
+  # security:
+  #   username: dev
+  #   password: secret
+
+---
+# With profile `prod`, api-spector auto-disables unless apispector.enabled=true
+spring:
+  config:
+    activate:
+      on-profile: prod
