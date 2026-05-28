@@ -2,12 +2,13 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { ArrowLeft, FileText, History, Upload, FlaskConical } from "lucide-react";
+import { ArrowLeft, FileText, History, Upload, FlaskConical, ShieldCheck } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { EnvironmentSwitcher } from "@/components/playground/environment-switcher";
 import { TokenPanel } from "@/components/playground/token-panel";
 import { SmokeTestDialog } from "@/components/playground/smoke-test-dialog";
+import { ValidationTestDialog } from "@/components/playground/validation-test-dialog";
 import type { Credential } from "@/lib/playground/credentials";
 import type { PlaygroundEndpoint } from "@/lib/playground/endpoints";
 
@@ -48,6 +49,7 @@ export function PlaygroundHeader({
   workingPaths,
 }: PlaygroundHeaderProps) {
   const [smokeOpen, setSmokeOpen] = useState(false);
+  const [validationOpen, setValidationOpen] = useState(false);
   const versionLabel = formatSpecVersion(specVersion);
 
   return (
@@ -101,9 +103,28 @@ export function PlaygroundHeader({
             <FlaskConical className="h-3.5 w-3.5" />
             Smoke tests
           </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            className="shrink-0 gap-1.5 h-8 text-xs"
+            onClick={() => setValidationOpen(true)}
+          >
+            <ShieldCheck className="h-3.5 w-3.5" />
+            Validation tests
+          </Button>
           <SmokeTestDialog
             open={smokeOpen}
             onOpenChange={setSmokeOpen}
+            specId={specId}
+            baseUrl={baseUrl}
+            credential={activeCredential}
+            endpoints={endpoints}
+            apiData={apiData ?? {}}
+            workingPaths={workingPaths}
+          />
+          <ValidationTestDialog
+            open={validationOpen}
+            onOpenChange={setValidationOpen}
             specId={specId}
             baseUrl={baseUrl}
             credential={activeCredential}

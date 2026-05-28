@@ -69,3 +69,102 @@ export function setActiveToken(specId: string, name: string | null): void {
     localStorage.setItem(prefix(specId, "active_token"), name);
   }
 }
+
+export type StoredValidationConfig = {
+  concurrency: number;
+  passPolicyKind: "4xx" | "strict-400" | "4xx-or-422" | "custom-range";
+  passPolicyMin?: number;
+  passPolicyMax?: number;
+  includeNoisyVariants: boolean;
+  perEndpointCap: number;
+};
+
+export type ValidationOverridesStore = {
+  global: Record<string, string>;
+  byEndpoint: Record<string, Record<string, string>>;
+};
+
+const EMPTY_OVERRIDES_STORE: ValidationOverridesStore = {
+  global: {},
+  byEndpoint: {},
+};
+
+function isLegacyFlatOverrides(
+  value: unknown
+): value is Record<string, string> {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return false;
+  const obj = value as Record<string, unknown>;
+  if ("global" in obj || "byEndpoint" in obj) return false;
+  return Object.values(obj).every((v) => typeof v === "string");
+}
+
+function migrateLegacyOverrides(
+  specId: string,
+  legacy: Record<string, string>
+): ValidationOverridesStore {
+  const store: ValidationOverridesStore = {
+    global: { ...legacy },
+    byEndpoint: {},
+  };
+  setValidationOverridesStore(specId, store);
+  return store;
+}
+
+export function getValidationOverridesStore(
+  specId: string
+): ValidationOverridesStore {
+  const stored = safeGet<ValidationOverridesStore>(
+    prefix(specId, "validation_overrides_store")
+  );
+  if (stored && typeof stored === "object" && "global" in stored) {
+    return {
+      global: stored.global ?? {},
+      byEndpoint: stored.byEndpoint ?? {},
+    };
+  }
+
+  const legacy = safeGet<Record<string, string>>(
+    prefix(specId, "validation_overrides")
+  );
+  if (legacy && isLegacyFlatOverrides(legacy)) {
+    return migrateLegacyOverrides(specId, legacy);
+  }
+
+  return { ...EMPTY_OVERRIDES_STORE };
+}
+
+export function setValidationOverridesStore(
+  specId: string,
+  store: ValidationOverridesStore
+): void {
+  safeSet(prefix(specId, "validation_overrides_store"), store);
+}
+
+/** @deprecated Use getValidationOverridesStore */
+export function getValidationOverrides(
+  specId: string
+): Record<string, string> | null {
+  return getValidationOverridesStore(specId).global;
+}
+
+/** @deprecated Use setValidationOverridesStore */
+export function setValidationOverrides(
+  specId: string,
+  overrides: Record<string, string>
+): void {
+  const current = getValidationOverridesStore(specId);
+  setValidationOverridesStore(specId, { ...current, global: overrides });
+}
+
+export function getValidationConfig(
+  specId: string
+): StoredValidationConfig | null {
+  return safeGet<StoredValidationConfig>(prefix(specId, "validation_config"));
+}
+
+export function setValidationConfig(
+  specId: string,
+  config: StoredValidationConfig
+): void {
+  safeSet(prefix(specId, "validation_config"), config);
+}
