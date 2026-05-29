@@ -114,6 +114,11 @@
   --sidebar-accent-foreground: #334155;
   --sidebar-border: #e2e8f0;
   --sidebar-ring: #00518d66;
+  --json-panel-bg: #ffffff;
+  --json-key: #475569;
+  --json-string: #0f766e;
+  --json-number: #6d28d9;
+  --json-bool: #c2410c;
 }
 
 .dark {
@@ -165,6 +170,11 @@
   --sidebar-accent-foreground: oklch(0.984 0.003 247.858);
   --sidebar-border: oklch(1 0 0 / 10%);
   --sidebar-ring: oklch(0.551 0.027 264.364);
+  --json-panel-bg: oklch(0.18 0.035 265);
+  --json-key: #cbd5e1;
+  --json-string: #2dd4bf;
+  --json-number: #a78bfa;
+  --json-bool: #fb923c;
 }
 
 @layer base {
@@ -180,6 +190,120 @@
   .tabular-nums {
     font-variant-numeric: tabular-nums;
   }
+}
+
+/* React Flow diagram — flowing edge animation */
+.flow-diagram .react-flow__edge-path {
+  stroke-width: 2;
+}
+
+.flow-diagram .flow-edge-seq.animated .react-flow__edge-path {
+  stroke-dasharray: 12 10;
+  animation: flow-diagram-dash-seq 1.4s linear infinite;
+}
+
+.flow-diagram .flow-edge-dep.animated .react-flow__edge-path {
+  stroke-dasharray: 10 8;
+  animation: flow-diagram-dash-dep 0.9s linear infinite;
+}
+
+@keyframes flow-diagram-dash-seq {
+  from {
+    stroke-dashoffset: 0;
+  }
+  to {
+    stroke-dashoffset: -22;
+  }
+}
+
+@keyframes flow-diagram-dash-dep {
+  from {
+    stroke-dashoffset: 0;
+  }
+  to {
+    stroke-dashoffset: -18;
+  }
+}
+
+/* JSON tree / code viewer */
+.json-tree-root {
+  font-family: var(--font-mono), ui-monospace, monospace;
+  font-size: 13px;
+  line-height: 1.65;
+}
+
+.json-tree-root ul {
+  margin: 0 !important;
+  padding-left: 1.125rem !important;
+  border-left: 1px solid color-mix(in srgb, var(--border) 55%, transparent);
+  margin-left: 0.25rem !important;
+}
+
+.json-tree-root > ul {
+  border-left: none;
+  padding-left: 0 !important;
+  margin-left: 0 !important;
+}
+
+.json-tree-root li {
+  margin: 0 !important;
+  margin-left: 0 !important;
+  padding: 2px 0 !important;
+  padding-left: 0 !important;
+  position: relative;
+  /* react-json-tree uses negative text-indent on value rows, which clips keys */
+  text-indent: 0 !important;
+}
+
+/* Key + value on one line; nested children wrap below */
+.json-tree-root li:has(> label) {
+  display: flex !important;
+  flex-wrap: wrap !important;
+  align-items: baseline !important;
+  gap: 0.15rem 0.35rem !important;
+}
+
+.json-tree-root li:has(> label) > ul {
+  flex-basis: 100%;
+  width: 100%;
+  margin-top: 0.1em;
+}
+
+.json-tree-root label {
+  display: inline-flex !important;
+  flex-shrink: 0;
+  margin: 0 !important;
+  padding: 0 !important;
+  text-indent: 0 !important;
+  font-weight: inherit;
+}
+
+.json-tree-root li > span {
+  display: inline !important;
+  text-indent: 0 !important;
+  margin-left: 0 !important;
+  padding-left: 0 !important;
+  min-width: 0;
+  word-break: break-word;
+}
+
+/* Expand/collapse control */
+.json-tree-root .react-json-tree-expand {
+  margin-right: 4px;
+  opacity: 0.55;
+  font-size: 10px;
+}
+
+.json-tree-root .react-json-tree-expand:hover {
+  opacity: 1;
+}
+
+.json-tree-panel-inner {
+  background: var(--json-panel-bg);
+}
+
+.json-tree-pick {
+  cursor: pointer;
 }
 
 @media (prefers-reduced-motion: reduce) {

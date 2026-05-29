@@ -7,7 +7,9 @@ import {
   endpointStatuses,
   specSettings,
   endpointNotes,
+  flows,
 } from "./schema";
+import type { Flow } from "@/lib/flows/types";
 import { runMigrations } from "./migrate";
 
 export type HistoryEntry = {
@@ -389,6 +391,100 @@ export function deleteEndpointNote(specId: string, noteId: number): boolean {
   if (!row) return false;
   db.delete(endpointNotes)
     .where(and(eq(endpointNotes.specId, specId), eq(endpointNotes.id, noteId)))
+    .run();
+  return true;
+}
+
+function parseFlowJson(raw: string): Flow | null {
+  try {
+    const parsed = JSON.parse(raw) as Flow;
+    if (!parsed?.id || !parsed?.specId || !Array.isArray(parsed.steps)) {
+      return null;
+    }
+    return parsed;
+  } catch {
+    return null;
+  }
+}
+
+export function listFlows(specId: string): Flow[] {
+  ensureMigrated();
+  const rows = getDb()
+    .select()
+    .from(flows)
+    .where(eq(flows.specId, specId))
+    .orderBy(desc(flows.updatedAt))
+    .all();
+  const result: Flow[] = [];
+  for (const row of rows) {
+    const flow = parseFlowJson(row.flowJson);
+    if (flow) result.push(flow);
+  }
+  return result;
+}
+
+export function getFlow(specId: string, flowId: string): Flow | null {
+  ensureMigrated();
+  const row = getDb()
+    .select()
+    .from(flows)
+    .where(and(eq(flows.specId, specId), eq(flows.id, flowId)))
+    .get();
+  if (!row) return null;
+  return parseFlowJson(row.flowJson);
+}
+
+export function saveFlow(flow: Flow): Flow {
+  ensureMigrated();
+  const now = Date.now();
+  const normalized: Flow = {
+    ...flow,
+    createdAt: flow.createdAt || now,
+    updatedAt: now,
+    onStepFailure: flow.onStepFailure ?? "stop",
+    steps: flow.steps ?? [],
+  };
+  const db = getDb();
+  const existing = db
+    .select({ id: flows.id })
+    .from(flows)
+    .where(and(eq(flows.specId, flow.specId), eq(flows.id, flow.id)))
+    .get();
+  if (existing) {
+    db.update(flows)
+      .set({
+        name: normalized.name.trim() || "Untitled flow",
+        flowJson: JSON.stringify(normalized),
+        updatedAt: now,
+      })
+      .where(and(eq(flows.specId, flow.specId), eq(flows.id, flow.id)))
+      .run();
+  } else {
+    db.insert(flows)
+      .values({
+        id: normalized.id,
+        specId: normalized.specId,
+        name: normalized.name.trim() || "Untitled flow",
+        flowJson: JSON.stringify(normalized),
+        createdAt: normalized.createdAt,
+        updatedAt: now,
+      })
+      .run();
+  }
+  return normalized;
+}
+
+export function deleteFlow(specId: string, flowId: string): boolean {
+  ensureMigrated();
+  const db = getDb();
+  const row = db
+    .select({ id: flows.id })
+    .from(flows)
+    .where(and(eq(flows.specId, specId), eq(flows.id, flowId)))
+    .get();
+  if (!row) return false;
+  db.delete(flows)
+    .where(and(eq(flows.specId, specId), eq(flows.id, flowId)))
     .run();
   return true;
 }

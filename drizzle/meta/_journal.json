@@ -15,6 +15,13 @@
       "when": 1779490426591,
       "tag": "0001_goofy_archangel",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "6",
+      "when": 1780035000000,
+      "tag": "0002_flows",
+      "breakpoints": true
     }
   ]
 }

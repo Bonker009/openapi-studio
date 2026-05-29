@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { ArrowLeft, FileText, History, Upload, FlaskConical, ShieldCheck } from "lucide-react";
+import { ArrowLeft, FileText, History, Upload, FlaskConical, ShieldCheck, Workflow } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { EnvironmentSwitcher } from "@/components/playground/environment-switcher";
@@ -111,6 +111,17 @@ export function PlaygroundHeader({
           >
             <ShieldCheck className="h-3.5 w-3.5" />
             Validation tests
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            className="shrink-0 gap-1.5 h-8 text-xs"
+            asChild
+          >
+            <Link href={`/documentation/${specId}/playground/flows`}>
+              <Workflow className="h-3.5 w-3.5" />
+              Flow tests
+            </Link>
           </Button>
           <SmokeTestDialog
             open={smokeOpen}

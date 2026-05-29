@@ -6,6 +6,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { JsonResponseViewLazy } from "@/components/playground/json-response-view-lazy";
+import { FormattedJsonCode } from "@/components/playground/formatted-json-code";
 import {
   byteSizeLabel,
   formatJsonBody,
@@ -19,10 +20,8 @@ type BodyView = "tree" | "raw";
 
 function RawBodyBlock({ code }: { code: string }) {
   return (
-    <div className="rounded-lg border border-border bg-muted/40 overflow-hidden">
-      <pre className="p-4 text-xs font-mono leading-relaxed whitespace-pre-wrap wrap-break-word text-foreground">
-        {code}
-      </pre>
+    <div className="overflow-hidden rounded-lg border border-border bg-[var(--json-panel-bg)] p-4">
+      <FormattedJsonCode code={code} />
     </div>
   );
 }

@@ -1,4 +1,5 @@
 import type { DiffSummary } from "@/lib/openapi-diff";
+import type { Flow } from "@/lib/flows/types";
 import { getRequestBaseUrl } from "@/lib/request-base-url";
 
 export type DataType = "spec" | "status" | "settings";
@@ -213,6 +214,36 @@ export async function deleteEndpointNote(
     method: "DELETE",
   });
   if (!response.ok) throw new Error("Failed to delete note");
+}
+
+export async function listFlows(specId: string): Promise<Flow[]> {
+  const base = getRequestBaseUrl();
+  const q = new URLSearchParams({ id: specId });
+  const response = await fetch(`${base}/api/data/flows?${q}`);
+  if (!response.ok) throw new Error("Failed to load flows");
+  const data = await response.json();
+  return data.flows ?? [];
+}
+
+export async function saveFlow(flow: Flow): Promise<Flow> {
+  const base = getRequestBaseUrl();
+  const response = await fetch(`${base}/api/data/flows`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(flow),
+  });
+  if (!response.ok) throw new Error("Failed to save flow");
+  const data = await response.json();
+  return data.flow;
+}
+
+export async function deleteFlow(specId: string, flowId: string): Promise<void> {
+  const base = getRequestBaseUrl();
+  const q = new URLSearchParams({ id: specId, flowId });
+  const response = await fetch(`${base}/api/data/flows?${q}`, {
+    method: "DELETE",
+  });
+  if (!response.ok) throw new Error("Failed to delete flow");
 }
 
 export async function deleteVersion(id: string, ts: string) {

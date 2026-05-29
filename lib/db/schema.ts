@@ -79,3 +79,18 @@ export const endpointNotes = sqliteTable(
     ),
   ]
 );
+
+export const flows = sqliteTable(
+  "flows",
+  {
+    id: text("id").primaryKey(),
+    specId: text("spec_id")
+      .notNull()
+      .references(() => specs.id, { onDelete: "cascade" }),
+    name: text("name").notNull(),
+    flowJson: text("flow_json").notNull(),
+    createdAt: integer("created_at").notNull(),
+    updatedAt: integer("updated_at").notNull(),
+  },
+  (table) => [index("flows_spec_id").on(table.specId)]
+);
