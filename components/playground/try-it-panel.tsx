@@ -115,6 +115,9 @@ export function TryItPanel({
   const [curlCopied, setCurlCopied] = useState(false);
   const [urlCopied, setUrlCopied] = useState(false);
   const [activeTab, setActiveTab] = useState("request");
+  const [querySectionOpen, setQuerySectionOpen] = useState(true);
+  const [headersSectionOpen, setHeadersSectionOpen] = useState(false);
+  const [bodySectionOpen, setBodySectionOpen] = useState(true);
   const skipOriginPreserveRef = useRef(false);
 
   const methodData = useMemo(() => {
@@ -144,6 +147,12 @@ export function TryItPanel({
     () => endpoint?.parameters.filter((p) => p.in === "header") ?? [],
     [endpoint]
   );
+
+  useEffect(() => {
+    setQuerySectionOpen(queryParams.length > 0);
+    setHeadersSectionOpen(false);
+    setBodySectionOpen(Boolean(endpoint?.hasRequestBody));
+  }, [endpoint, queryParams.length]);
 
   const resetMultipartBody = useCallback(() => {
     setMultipartState(
@@ -558,7 +567,7 @@ export function TryItPanel({
   return (
     <div
       id="playground-try-it"
-      className="flex flex-col h-full min-h-0 bg-card"
+      className="flex flex-col flex-1 min-h-0 bg-card"
     >
       <div className="shrink-0 border-b border-border bg-card px-4 py-3 space-y-2.5">
         <div className="flex items-center gap-2 min-w-0">
@@ -650,10 +659,10 @@ export function TryItPanel({
 
           <TabsContent
             value="request"
-            className="flex-1 min-h-0 overflow-hidden mt-0 data-[state=inactive]:hidden"
+            className="mt-0 flex flex-col flex-1 min-h-0 overflow-hidden data-[state=inactive]:hidden"
           >
-            <div className="grid h-full min-h-0 gap-4 xl:grid-cols-[minmax(0,0.95fr)_minmax(420px,1.05fr)]">
-              <div className="min-h-0 overflow-y-auto space-y-4 pr-1">
+            <div className="flex h-full min-h-0 flex-1 flex-col gap-4 xl:flex-row">
+              <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain space-y-4 pr-1 xl:min-w-0">
                 <div className="rounded-xl border border-border bg-background p-4 space-y-4">
                   <div className="flex items-center justify-between gap-3">
                     <div>
@@ -661,11 +670,12 @@ export function TryItPanel({
                         Request
                       </p>
                       <p className="text-[11px] text-muted-foreground">
-                        Configure parameters, auth headers, and body.
+                        Path and URL are always visible; expand sections below as
+                        needed.
                       </p>
                     </div>
                     {responseStatus != null && (
-                      <span className="rounded-full bg-muted px-2 py-1 text-[11px] text-muted-foreground tabular-nums">
+                      <span className="rounded-full bg-muted px-2 py-1 text-[11px] text-muted-foreground tabular-nums shrink-0">
                         Last {responseStatus}
                         {responseTime != null && ` · ${responseTime} ms`}
                       </span>
@@ -681,20 +691,54 @@ export function TryItPanel({
                     </div>
                   )}
                   {queryParams.length > 0 && (
-                    <div>
-                      <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground mb-2">
-                        Query
-                      </p>
-                      {renderParamFields(queryParams, "query")}
-                    </div>
+                    <Collapsible
+                      open={querySectionOpen}
+                      onOpenChange={setQuerySectionOpen}
+                    >
+                      <CollapsibleTrigger asChild>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          className="h-8 w-full justify-between px-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground hover:text-foreground"
+                        >
+                          Query ({queryParams.length})
+                          {querySectionOpen ? (
+                            <ChevronUp className="h-3.5 w-3.5" />
+                          ) : (
+                            <ChevronDown className="h-3.5 w-3.5" />
+                          )}
+                        </Button>
+                      </CollapsibleTrigger>
+                      <CollapsibleContent className="pt-2">
+                        {renderParamFields(queryParams, "query")}
+                      </CollapsibleContent>
+                    </Collapsible>
                   )}
                   {headerParams.length > 0 && (
-                    <div>
-                      <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground mb-2">
-                        Headers
-                      </p>
-                      {renderParamFields(headerParams, "header")}
-                    </div>
+                    <Collapsible
+                      open={headersSectionOpen}
+                      onOpenChange={setHeadersSectionOpen}
+                    >
+                      <CollapsibleTrigger asChild>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          className="h-8 w-full justify-between px-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground hover:text-foreground"
+                        >
+                          Headers ({headerParams.length})
+                          {headersSectionOpen ? (
+                            <ChevronUp className="h-3.5 w-3.5" />
+                          ) : (
+                            <ChevronDown className="h-3.5 w-3.5" />
+                          )}
+                        </Button>
+                      </CollapsibleTrigger>
+                      <CollapsibleContent className="pt-2">
+                        {renderParamFields(headerParams, "header")}
+                      </CollapsibleContent>
+                    </Collapsible>
                   )}
                   {pathParams.length === 0 &&
                     queryParams.length === 0 &&
@@ -712,19 +756,35 @@ export function TryItPanel({
                   )}
                 </div>
 
-                <div className="rounded-xl border border-border bg-background p-4 space-y-3">
+                <Collapsible
+                  open={bodySectionOpen}
+                  onOpenChange={setBodySectionOpen}
+                  className="rounded-xl border border-border bg-background"
+                >
+                  <div className="flex items-center justify-between gap-2 p-3 pb-0">
+                    <CollapsibleTrigger asChild>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        className="h-8 flex-1 justify-between px-2 text-xs font-semibold text-foreground"
+                      >
+                        {endpoint.hasRequestBody
+                          ? `Body${requestBodyInfo.contentType ? ` (${requestBodyInfo.contentType})` : ""}`
+                          : "Body"}
+                        {bodySectionOpen ? (
+                          <ChevronUp className="h-3.5 w-3.5 shrink-0" />
+                        ) : (
+                          <ChevronDown className="h-3.5 w-3.5 shrink-0" />
+                        )}
+                      </Button>
+                    </CollapsibleTrigger>
+                  </div>
+                  <CollapsibleContent className="p-4 pt-3 space-y-3">
                   {endpoint.hasRequestBody ? (
                     <div className="space-y-2">
-                      <Label
-                        id="request-body-label"
-                        className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground"
-                      >
-                        Body
-                        {requestBodyInfo.contentType && (
-                          <span className="font-mono font-normal normal-case ml-2 text-muted-foreground">
-                            ({requestBodyInfo.contentType})
-                          </span>
-                        )}
+                      <Label id="request-body-label" className="sr-only">
+                        Request body
                       </Label>
                       {bodyKind === "json" && (
                         <>
@@ -801,7 +861,8 @@ export function TryItPanel({
                       This operation has no request body.
                     </p>
                   )}
-                </div>
+                  </CollapsibleContent>
+                </Collapsible>
 
                 <Collapsible
                   open={curlOpen}
@@ -847,7 +908,7 @@ export function TryItPanel({
                 </Collapsible>
               </div>
 
-              <div className="min-h-[360px] xl:min-h-0 overflow-hidden rounded-xl border border-border bg-background">
+              <div className="flex min-h-[min(360px,40vh)] flex-col overflow-hidden rounded-xl border border-border bg-background xl:min-h-0 xl:min-w-[300px] xl:flex-[1.05]">
                 <ResponseViewer
                   embedded
                   status={responseStatus}
