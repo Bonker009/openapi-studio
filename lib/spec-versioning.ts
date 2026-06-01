@@ -1,68 +1,84 @@
-import path from "path";
 import type { DiffSummary } from "@/lib/openapi-diff";
-import { DATA_DIR } from "@/lib/db/client";
+import {
+  postgresEndpointStatusRepository,
+  postgresSpecRepository,
+  postgresSpecSettingsRepository,
+} from "@/infrastructure/repositories";
 
-export const SPECS_DIR = path.join(DATA_DIR, "specs");
-export const STATUS_DIR = path.join(DATA_DIR, "status");
-export const SETTINGS_DIR = path.join(DATA_DIR, "settings");
+export type { HistoryEntry } from "@/infrastructure/repositories/domain-types";
+export type { EndpointStatusRow, SpecSettingsData } from "@/infrastructure/repositories/domain-types";
 
-export type { HistoryEntry } from "@/lib/db/repositories";
+export { validateSpecId } from "@/lib/spec-id";
 
-export {
-  validateSpecId,
-  readHistory,
-  saveSpecVersion,
-  readSpecSnapshot,
-  deleteSpecFully,
-  deleteVersionSnapshot,
-  listCanonicalSpecIds,
-  specExists,
-  getSpec,
-  listSpecSummaries,
-  getEndpointStatuses,
-  saveEndpointStatuses,
-  deleteEndpointStatuses,
-  getSpecSettings,
-  saveSpecSettings,
-  deleteSpecSettings,
-} from "@/lib/db/repositories";
-
-/** @deprecated File-based paths; kept for import script and legacy migration only. */
-export function specCanonicalPath(id: string): string {
-  return path.join(SPECS_DIR, `${id}.json`);
+export async function readHistory(id: string) {
+  return postgresSpecRepository.readHistory(id);
 }
 
-/** @deprecated File-based paths; kept for import script only. */
-export function specDir(id: string): string {
-  return path.join(SPECS_DIR, id);
+export async function saveSpecVersion(
+  id: string,
+  data: Record<string, unknown>,
+  meta?: { note?: string; summary?: DiffSummary; isRestore?: boolean }
+) {
+  return postgresSpecRepository.saveVersion(id, data, meta);
 }
 
-/** @deprecated File-based paths; kept for import script only. */
-export function versionsDir(id: string): string {
-  return path.join(specDir(id), "versions");
+export async function readSpecSnapshot(id: string, ts: string) {
+  return postgresSpecRepository.readSnapshot(id, ts);
 }
 
-/** @deprecated File-based paths; kept for import script only. */
-export function historyPath(id: string): string {
-  return path.join(specDir(id), "history.json");
+export async function deleteSpecFully(id: string) {
+  return postgresSpecRepository.delete(id);
 }
 
-/** @deprecated File-based paths; kept for import script only. */
-export function versionSnapshotPath(id: string, ts: string): string {
-  return path.join(versionsDir(id), `${ts}.json`);
+export async function deleteVersionSnapshot(id: string, ts: string) {
+  return postgresSpecRepository.deleteVersion(id, ts);
 }
 
-/** No-op: history is stored in spec_versions table. */
-export function writeHistory(
-  _id: string,
-  _entries: import("@/lib/db/repositories").HistoryEntry[]
-): void {
-  /* legacy API — not used after SQLite migration */
+export async function listCanonicalSpecIds() {
+  const items = await postgresSpecRepository.listSummaries();
+  return items.map((i) => i.id);
 }
 
-/** No-op: legacy file migration handled by db:import script. */
-export function migrateLegacyVersions(_id: string): void {
-  /* legacy API — not used after SQLite migration */
+export async function specExists(id: string) {
+  return postgresSpecRepository.exists(id);
+}
+
+export async function getSpec(id: string) {
+  return postgresSpecRepository.findById(id);
+}
+
+export async function listSpecSummaries() {
+  return postgresSpecRepository.listSummaries();
+}
+
+export async function getEndpointStatuses(id: string) {
+  return postgresEndpointStatusRepository.findBySpecId(id);
+}
+
+export async function saveEndpointStatuses(
+  id: string,
+  data: import("@/infrastructure/repositories/domain-types").EndpointStatusRow[]
+) {
+  return postgresEndpointStatusRepository.save(id, data);
+}
+
+export async function deleteEndpointStatuses(id: string) {
+  return postgresEndpointStatusRepository.delete(id);
+}
+
+export async function getSpecSettings(id: string) {
+  return postgresSpecSettingsRepository.findBySpecId(id);
+}
+
+export async function saveSpecSettings(
+  id: string,
+  data: import("@/infrastructure/repositories/domain-types").SpecSettingsData
+) {
+  return postgresSpecSettingsRepository.save(id, data);
+}
+
+export async function deleteSpecSettings(id: string) {
+  return postgresSpecSettingsRepository.delete(id);
 }
 
 export type SaveSpecMeta = {

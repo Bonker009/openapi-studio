@@ -39,7 +39,7 @@ export async function GET(request: NextRequest) {
   try {
     switch (type) {
       case "spec": {
-        const data = getSpec(id);
+        const data = await getSpec(id);
         if (!data) {
           return NextResponse.json(
             { error: "Specification not found" },
@@ -49,11 +49,11 @@ export async function GET(request: NextRequest) {
         return NextResponse.json(data);
       }
       case "status": {
-        const data = getEndpointStatuses(id);
+        const data = await getEndpointStatuses(id);
         return NextResponse.json(data ?? {});
       }
       case "settings": {
-        const data = getSpecSettings(id);
+        const data = await getSpecSettings(id);
         return NextResponse.json(data ?? {});
       }
       default:
@@ -95,15 +95,15 @@ export async function POST(request: NextRequest) {
 
     switch (type) {
       case "spec": {
-        const ts = saveSpecVersion(id, data, meta);
+        const ts = await saveSpecVersion(id, data, meta);
         return NextResponse.json({ success: true, ts });
       }
       case "status": {
-        saveEndpointStatuses(id, data);
+        await saveEndpointStatuses(id, data);
         return NextResponse.json({ success: true });
       }
       case "settings": {
-        saveSpecSettings(id, data);
+        await saveSpecSettings(id, data);
         return NextResponse.json({ success: true });
       }
       default:
@@ -140,15 +140,15 @@ export async function DELETE(request: NextRequest) {
   try {
     switch (type) {
       case "spec": {
-        deleteSpecFully(id);
+        await deleteSpecFully(id);
         return NextResponse.json({ success: true });
       }
       case "status": {
-        deleteEndpointStatuses(id);
+        await deleteEndpointStatuses(id);
         return NextResponse.json({ success: true });
       }
       case "settings": {
-        deleteSpecSettings(id);
+        await deleteSpecSettings(id);
         return NextResponse.json({ success: true });
       }
       default:

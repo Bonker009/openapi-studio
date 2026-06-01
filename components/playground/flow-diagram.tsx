@@ -41,6 +41,8 @@ import {
   Plus,
   Search,
   Trash2,
+  Redo2,
+  Undo2,
   Wand2,
   X,
   ZoomIn,
@@ -109,6 +111,7 @@ import {
   type StepRunResult,
 } from "@/lib/flows/types";
 import { cn } from "@/lib/utils";
+import { useDiagramHistory } from "@/features/flow/hooks/use-diagram-history";
 
 const DND_MIME = "application/x-flow-endpoint";
 
@@ -162,11 +165,87 @@ function statusColor(
   }
 }
 
-function StepNode({ data }: { data: StepNodeData }) {
-  const [showError, setShowError] = useState(false);
-  const failed = data.outcome === "fail" || data.outcome === "error";
+function StepErrorPopover({
+  data,
+}: {
+  data: Pick<
+    StepNodeData,
+    "label" | "error" | "outcome" | "responseBody" | "responseBodyPreview" | "onRunFromHere"
+  >;
+}) {
+  const [open, setOpen] = useState(false);
   const errorLabel =
     data.error ?? (data.outcome === "error" ? "Request error" : "Step failed");
+
+  return (
+    <Popover open={open} onOpenChange={setOpen}>
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <PopoverTrigger asChild>
+            <button
+              type="button"
+              className="nodrag flex items-center justify-center rounded p-0.5 text-destructive hover:bg-destructive/15 focus:outline-none focus-visible:ring-1 focus-visible:ring-destructive"
+              aria-label={`Error details for ${data.label}`}
+              onClick={(e) => e.stopPropagation()}
+            >
+              <AlertTriangle className="h-3.5 w-3.5 shrink-0" />
+            </button>
+          </PopoverTrigger>
+        </TooltipTrigger>
+        <TooltipContent side="top" className="max-w-[200px] text-[11px]">
+          {errorLabel}
+        </TooltipContent>
+      </Tooltip>
+
+      <PopoverContent
+        className="nodrag nowheel w-72 space-y-2 p-3 text-xs"
+        side="right"
+        align="start"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="flex items-start gap-1.5">
+          <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0 text-destructive" />
+          <p className="break-words text-[11px] font-medium text-destructive leading-snug">
+            {errorLabel}
+          </p>
+        </div>
+
+        <div className="overflow-hidden rounded border border-border">
+          <p className="border-b border-border bg-muted/30 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-muted-foreground">
+            Response
+          </p>
+          {isJsonTreeValue(data.responseBody) ? (
+            <LiveJsonTree value={data.responseBody} variant="minimal" hideRoot />
+          ) : (
+            <pre className="max-h-36 overflow-auto whitespace-pre-wrap break-words p-1.5 text-[10px] font-mono text-foreground">
+              {data.responseBodyPreview ?? "No response body"}
+            </pre>
+          )}
+        </div>
+
+        {data.onRunFromHere && (
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            className="h-7 w-full gap-1 text-[10px]"
+            onClick={(e) => {
+              e.stopPropagation();
+              data.onRunFromHere?.();
+              setOpen(false);
+            }}
+          >
+            <Play className="h-2.5 w-2.5" />
+            Run from here
+          </Button>
+        )}
+      </PopoverContent>
+    </Popover>
+  );
+}
+
+function StepNode({ data }: { data: StepNodeData }) {
+  const failed = data.outcome === "fail" || data.outcome === "error";
 
   return (
     <div
@@ -182,12 +261,13 @@ function StepNode({ data }: { data: StepNodeData }) {
         id="target"
         className="!w-2.5 !h-2.5 !bg-muted-foreground !border-2 !border-background"
       />
+
       <div className="flex items-center gap-2 mb-1">
         <MethodBadge method={data.method} />
         {data.role && (
           <span
             className={cn(
-              "text-[10px] px-1.5 py-0.5 rounded truncate max-w-[100px]",
+              "text-[10px] px-1.5 py-0.5 rounded truncate max-w-[80px]",
               data.isLogin
                 ? "bg-primary/15 text-primary border border-primary/30"
                 : "bg-secondary text-secondary-foreground"
@@ -196,81 +276,14 @@ function StepNode({ data }: { data: StepNodeData }) {
             {data.role}
           </span>
         )}
+        {failed && (
+          <div className="ml-auto">
+            <StepErrorPopover data={data} />
+          </div>
+        )}
       </div>
+
       <p className="text-xs font-mono truncate">{data.label}</p>
-
-      {failed && (
-        <div className="mt-1.5 border-t border-border/60 pt-1.5">
-          <button
-            type="button"
-            className="nodrag flex w-full items-center gap-1 text-left text-[10px] font-medium text-destructive"
-            aria-expanded={showError}
-            aria-label={
-              showError
-                ? `Hide error details for ${data.label}`
-                : `Show error details for ${data.label}`
-            }
-            onClick={(e) => {
-              e.stopPropagation();
-              setShowError((v) => !v);
-            }}
-          >
-            {showError ? (
-              <ChevronDown className="h-3 w-3 shrink-0" />
-            ) : (
-              <ChevronRight className="h-3 w-3 shrink-0" />
-            )}
-            <AlertTriangle className="h-3 w-3 shrink-0" />
-            <span className="truncate">{errorLabel}</span>
-          </button>
-
-          {showError && (
-            <div
-              role="region"
-              aria-label={`Error details for ${data.label}`}
-              className="nodrag nowheel mt-1 space-y-1"
-            >
-              {data.error && (
-                <p className="text-[10px] text-destructive break-words">
-                  {data.error}
-                </p>
-              )}
-              <div className="overflow-hidden rounded border border-border">
-                <p className="border-b border-border bg-muted/30 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-muted-foreground">
-                  Response
-                </p>
-                {isJsonTreeValue(data.responseBody) ? (
-                  <LiveJsonTree
-                    value={data.responseBody}
-                    variant="minimal"
-                    hideRoot
-                  />
-                ) : (
-                  <pre className="max-h-32 overflow-auto whitespace-pre-wrap break-words p-1.5 text-[10px] font-mono text-foreground">
-                    {data.responseBodyPreview ?? "No response body"}
-                  </pre>
-                )}
-              </div>
-              {data.onRunFromHere && (
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  className="nodrag h-6 w-full gap-1 text-[10px]"
-                  aria-label={`Run flow from ${data.label}`}
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    data.onRunFromHere?.();
-                  }}
-                >
-                  <Play className="h-2.5 w-2.5" />
-                  Run from here
-                </Button>
-              )}
-            </div>
-          )}
-        </div>
-      )}
 
       <Handle
         type="source"
@@ -622,6 +635,52 @@ function FlowCanvas({
   const [showMiniMap, setShowMiniMap] = useState(true);
   const [showGrid, setShowGrid] = useState(true);
   const [menu, setMenu] = useState<MenuState | null>(null);
+  const diagramRootRef = useRef<HTMLDivElement>(null);
+
+  const ensureSelectionAfterRestore = useCallback(
+    (restored: Flow) => {
+      if (
+        selectedStepId &&
+        !restored.steps.some((s) => s.id === selectedStepId)
+      ) {
+        onSelectStep(null);
+      }
+    },
+    [selectedStepId, onSelectStep]
+  );
+
+  const {
+    commitDiagramChange,
+    undo,
+    redo,
+    canUndo,
+    canRedo,
+  } = useDiagramHistory(flow, onChange, {
+    onAfterRestore: ensureSelectionAfterRestore,
+  });
+
+  useEffect(() => {
+    if (!visible) return;
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (!(e.metaKey || e.ctrlKey) || e.key.toLowerCase() !== "z") return;
+      const target = e.target as HTMLElement | null;
+      if (
+        target?.closest(
+          "input, textarea, select, [contenteditable='true'], [role='combobox']"
+        )
+      ) {
+        return;
+      }
+      e.preventDefault();
+      if (e.shiftKey) {
+        if (canRedo) redo();
+      } else if (canUndo) {
+        undo();
+      }
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [visible, undo, redo, canUndo, canRedo]);
 
   const resultByStepId = useMemo(() => {
     const m = new Map<string, StepRunResult>();
@@ -668,7 +727,7 @@ function FlowCanvas({
 
   const persistPositions = useCallback(
     (id: string, x: number, y: number) => {
-      onChange({
+      commitDiagramChange({
         ...flow,
         diagramPositions: {
           ...(flow.diagramPositions ?? {}),
@@ -676,7 +735,7 @@ function FlowCanvas({
         },
       });
     },
-    [flow, onChange]
+    [flow, commitDiagramChange]
   );
 
   const onNodeDragStop = useCallback(
@@ -696,9 +755,9 @@ function FlowCanvas({
         ...flow,
         connections: nextConns,
       });
-      onChange({ ...flow, connections: nextConns, steps: reordered });
+      commitDiagramChange({ ...flow, connections: nextConns, steps: reordered });
     },
-    [flow, onChange]
+    [flow, commitDiagramChange]
   );
 
   const deleteSteps = useCallback(
@@ -710,10 +769,10 @@ function FlowCanvas({
       const connections = pruneConnections(base, new Set(steps.map((s) => s.id)));
       const positions = { ...(flow.diagramPositions ?? {}) };
       for (const id of ids) delete positions[id];
-      onChange({ ...flow, steps, connections, diagramPositions: positions });
+      commitDiagramChange({ ...flow, steps, connections, diagramPositions: positions });
       if (selectedStepId && idSet.has(selectedStepId)) onSelectStep(null);
     },
-    [flow, onChange, selectedStepId, onSelectStep]
+    [flow, commitDiagramChange, selectedStepId, onSelectStep]
   );
 
   const deleteSeqEdges = useCallback(
@@ -723,9 +782,9 @@ function FlowCanvas({
       let conns = flow.connections ?? linearConnections(flow.steps);
       for (const e of seq) conns = removeConnection(conns, e.source, e.target);
       const reordered = reorderStepsByConnections({ ...flow, connections: conns });
-      onChange({ ...flow, connections: conns, steps: reordered });
+      commitDiagramChange({ ...flow, connections: conns, steps: reordered });
     },
-    [flow, onChange]
+    [flow, commitDiagramChange]
   );
 
   // Figma-style edge detach/re-attach: drag an endpoint to a new node to rewire,
@@ -755,9 +814,9 @@ function FlowCanvas({
         ...flow,
         connections: added,
       });
-      onChange({ ...flow, connections: added, steps: reordered });
+      commitDiagramChange({ ...flow, connections: added, steps: reordered });
     },
-    [flow, onChange]
+    [flow, commitDiagramChange]
   );
 
   const onReconnectEnd = useCallback(
@@ -786,7 +845,7 @@ function FlowCanvas({
         y: event.clientY,
       });
       const step = createFlowStepFromEndpoint(endpoint, apiData, baseUrl);
-      onChange({
+      commitDiagramChange({
         ...flow,
         steps: [...flow.steps, step],
         diagramPositions: {
@@ -796,7 +855,15 @@ function FlowCanvas({
       });
       onSelectStep(step.id);
     },
-    [flow, endpoints, apiData, baseUrl, screenToFlowPosition, onChange, onSelectStep]
+    [
+      flow,
+      endpoints,
+      apiData,
+      baseUrl,
+      screenToFlowPosition,
+      commitDiagramChange,
+      onSelectStep,
+    ]
   );
 
   const onDragOver = useCallback((event: DragEvent) => {
@@ -808,7 +875,7 @@ function FlowCanvas({
     const stepIds = flow.steps.map((s) => s.id);
     try {
       const positions = await layoutWithElk(stepIds, effectiveConnections(flow));
-      onChange({ ...flow, diagramPositions: positions });
+      commitDiagramChange({ ...flow, diagramPositions: positions });
       requestAnimationFrame(() => void fitView({ padding: 0.25, duration: 200 }));
     } catch {
       const ordered = orderSteps(flow);
@@ -816,10 +883,10 @@ function FlowCanvas({
       ordered.forEach((s, i) => {
         positions[s.id] = defaultDiagramPosition(i);
       });
-      onChange({ ...flow, diagramPositions: positions });
+      commitDiagramChange({ ...flow, diagramPositions: positions });
       requestAnimationFrame(() => void fitView({ padding: 0.25, duration: 200 }));
     }
-  }, [flow, onChange, fitView]);
+  }, [flow, commitDiagramChange, fitView]);
 
   const deleteSelected = useCallback(() => {
     const selectedNodeIds = nodes.filter((n) => n.selected).map((n) => n.id);
@@ -843,7 +910,7 @@ function FlowCanvas({
       const pos =
         flow.diagramPositions?.[id] ??
         defaultDiagramPosition(flow.steps.length);
-      onChange({
+      commitDiagramChange({
         ...flow,
         steps: [...flow.steps, copy],
         diagramPositions: {
@@ -853,7 +920,7 @@ function FlowCanvas({
       });
       onSelectStep(copy.id);
     },
-    [flow, onChange, onSelectStep]
+    [flow, commitDiagramChange, onSelectStep]
   );
 
   const onNodeClick = useCallback(
@@ -903,7 +970,7 @@ function FlowCanvas({
           label: "Use as login for flow",
           icon: <KeyRound className="h-3.5 w-3.5" />,
           onClick: () => {
-            onChange(setFlowLoginStep(flow, targetId));
+            commitDiagramChange(setFlowLoginStep(flow, targetId));
             toast.success("This step is now the flow login");
           },
         },
@@ -961,11 +1028,11 @@ function FlowCanvas({
     autoArrange,
     fitView,
     flow,
-    onChange,
+    commitDiagramChange,
   ]);
 
   return (
-    <div className="relative h-full w-full">
+    <div ref={diagramRootRef} className="relative h-full w-full outline-none">
       <div className="h-full w-full" onDrop={onDrop} onDragOver={onDragOver}>
         <ReactFlow
           nodes={nodes}
@@ -1020,8 +1087,24 @@ function FlowCanvas({
                 flow={flow}
                 endpoints={endpoints}
                 credentials={credentials}
-                onChange={onChange}
+                onChange={commitDiagramChange}
               />
+              <Separator />
+              <ToolbarButton
+                label="Undo (Ctrl+Z)"
+                onClick={undo}
+                disabled={!canUndo}
+              >
+                <Undo2 className="h-4 w-4" />
+              </ToolbarButton>
+              <ToolbarButton
+                label="Redo (Ctrl+Shift+Z)"
+                onClick={redo}
+                disabled={!canRedo}
+              >
+                <Redo2 className="h-4 w-4" />
+              </ToolbarButton>
+              <Separator />
               <ToolbarButton label="Auto-arrange" onClick={() => void autoArrange()}>
                 <Wand2 className="h-4 w-4" />
               </ToolbarButton>
@@ -1089,7 +1172,7 @@ function FlowCanvas({
         selectedStepId={selectedStepId}
         resultByStepId={resultByStepId}
         runningIndex={runningIndex}
-        onChange={onChange}
+        onChange={commitDiagramChange}
         onClose={() => onSelectStep(null)}
         onRunFromStep={onRunFromStep}
       />
@@ -1226,11 +1309,13 @@ function Separator() {
 function ToolbarButton({
   label,
   active,
+  disabled,
   onClick,
   children,
 }: {
   label: string;
   active?: boolean;
+  disabled?: boolean;
   onClick: () => void;
   children: React.ReactNode;
 }) {
@@ -1242,6 +1327,7 @@ function ToolbarButton({
           variant={active ? "secondary" : "ghost"}
           size="icon"
           className="h-8 w-8"
+          disabled={disabled}
           onClick={onClick}
         >
           {children}

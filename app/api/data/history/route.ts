@@ -1,8 +1,5 @@
 import { type NextRequest, NextResponse } from "next/server";
-import {
-  readHistory,
-  specExists,
-} from "@/lib/spec-versioning";
+import { readHistory, specExists } from "@/lib/spec-versioning";
 import { formatDiffCounts } from "@/lib/openapi-diff";
 import { guardDataRoute, invalidIdResponse, validateDataId } from "@/lib/security/data-api";
 
@@ -16,8 +13,8 @@ export async function GET(request: NextRequest) {
     return invalidIdResponse();
   }
 
-  const history = readHistory(id);
-  const canonicalExists = specExists(id);
+  const history = await readHistory(id);
+  const canonicalExists = await specExists(id);
 
   const entries = history.map((entry) => ({
     ...entry,

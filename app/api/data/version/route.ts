@@ -15,7 +15,7 @@ export async function DELETE(request: NextRequest) {
   }
 
   try {
-    deleteVersionSnapshot(id, ts);
+    await deleteVersionSnapshot(id, ts);
     return NextResponse.json({ success: true });
   } catch (error) {
     console.error("Error deleting version:", error);

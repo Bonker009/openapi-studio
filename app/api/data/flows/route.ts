@@ -1,11 +1,11 @@
 import { type NextRequest, NextResponse } from "next/server";
-import {
-  deleteFlow,
-  listFlows,
-  saveFlow,
-} from "@/lib/db/repositories";
 import type { Flow } from "@/lib/flows/types";
 import { MAX_FLOW_STEPS } from "@/lib/flows/types";
+import {
+  deletePersistedFlow,
+  listPersistedFlows,
+  savePersistedFlow,
+} from "@/infrastructure/flows/flow-persistence-service";
 import {
   assertPayloadSize,
   guardDataRoute,
@@ -34,7 +34,7 @@ export async function GET(request: NextRequest) {
   const id = request.nextUrl.searchParams.get("id");
   if (!id || !validateDataId(id)) return invalidIdResponse();
 
-  const flows = listFlows(id);
+  const flows = await listPersistedFlows(id);
   return NextResponse.json({ flows });
 }
 
@@ -56,7 +56,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Invalid flow payload" }, { status: 400 });
   }
 
-  const flow = saveFlow(body);
+  const flow = await savePersistedFlow(body);
   return NextResponse.json({ flow });
 }
 
@@ -72,7 +72,7 @@ export async function DELETE(request: NextRequest) {
     return NextResponse.json({ error: "flowId is required" }, { status: 400 });
   }
 
-  const ok = deleteFlow(id, flowId);
+  const ok = await deletePersistedFlow(id, flowId);
   if (!ok) {
     return NextResponse.json({ error: "Flow not found" }, { status: 404 });
   }

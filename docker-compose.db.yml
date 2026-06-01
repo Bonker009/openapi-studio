@@ -1,0 +1,28 @@
+# Postgres only (app on host: npm run dev)
+#
+#   docker compose -f docker-compose.db.yml up -d
+#
+#   DATABASE_URL=postgresql://app:app@127.0.0.1:15432/flows
+
+services:
+  db:
+    image: postgres:16-alpine
+    container_name: list-endpoints-db
+    environment:
+      POSTGRES_USER: app
+      POSTGRES_PASSWORD: app
+      POSTGRES_DB: flows
+    ports:
+      - "15432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U app -d flows"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+
+volumes:
+  pgdata:

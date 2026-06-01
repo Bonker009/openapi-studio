@@ -1,8 +1,5 @@
 import { type NextRequest, NextResponse } from "next/server";
-import {
-  readSpecSnapshot,
-  saveSpecVersion,
-} from "@/lib/spec-versioning";
+import { readSpecSnapshot, saveSpecVersion } from "@/lib/spec-versioning";
 import {
   guardDataRoute,
   invalidIdResponse,
@@ -21,12 +18,12 @@ export async function POST(request: NextRequest) {
       return invalidIdResponse();
     }
 
-    const snapshot = readSpecSnapshot(id, ts);
+    const snapshot = await readSpecSnapshot(id, ts);
     if (!snapshot) {
       return NextResponse.json({ error: "Version not found" }, { status: 404 });
     }
 
-    const newTs = saveSpecVersion(id, snapshot, {
+    const newTs = await saveSpecVersion(id, snapshot, {
       note: `Restored from version ${ts}`,
       isRestore: true,
     });

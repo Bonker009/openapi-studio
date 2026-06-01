@@ -17,8 +17,8 @@ export async function GET(request: NextRequest) {
   }
 
   try {
-    const oldDoc = readSpecSnapshot(id, from);
-    const newDoc = readSpecSnapshot(id, to);
+    const oldDoc = await readSpecSnapshot(id, from);
+    const newDoc = await readSpecSnapshot(id, to);
 
     if (!oldDoc || !newDoc) {
       return NextResponse.json(

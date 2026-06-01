@@ -1,9 +1,5 @@
 import { type NextRequest, NextResponse } from "next/server";
-import {
-  appendEndpointNote,
-  deleteEndpointNote,
-  listEndpointNotes,
-} from "@/lib/db/repositories";
+import { postgresEndpointNotesRepository } from "@/infrastructure/repositories";
 import {
   guardDataRoute,
   invalidIdResponse,
@@ -26,7 +22,7 @@ export async function GET(request: NextRequest) {
     );
   }
 
-  const notes = listEndpointNotes(id, path, method);
+  const notes = await postgresEndpointNotesRepository.list(id, path, method);
   return NextResponse.json({ notes });
 }
 
@@ -56,7 +52,7 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  const note = appendEndpointNote(id, path, method, {
+  const note = await postgresEndpointNotesRepository.append(id, path, method, {
     body: noteBody,
     kind,
   });
@@ -76,7 +72,7 @@ export async function DELETE(request: NextRequest) {
     return NextResponse.json({ error: "Invalid noteId" }, { status: 400 });
   }
 
-  const ok = deleteEndpointNote(id, noteId);
+  const ok = await postgresEndpointNotesRepository.delete(id, noteId);
   if (!ok) {
     return NextResponse.json({ error: "Note not found" }, { status: 404 });
   }

@@ -18,7 +18,7 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: "Invalid type parameter" }, { status: 400 });
     }
 
-    return NextResponse.json(listSpecSummaries());
+    return NextResponse.json(await listSpecSummaries());
   } catch (error) {
     console.error(`Error listing ${type} data:`, error);
     return NextResponse.json(

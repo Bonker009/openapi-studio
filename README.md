@@ -1,36 +1,106 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Poseidon — API Documentation & OpenAPI Toolkit
 
-## Getting Started
+Next.js application for managing OpenAPI specifications: endpoint documentation, interactive playground, validation suites, flow testing, version history with semantic diffing, and Excel export.
 
-First, run the development server:
+## Features
 
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+- **Spec management** — Upload, list, search, and delete OpenAPI specs with version history
+- **Documentation** — Browse endpoints by controller, track working status and notes
+- **Playground** — Try endpoints with auth, environments, and server-side proxy (SSRF-safe)
+- **Validation** — Generate and run validation test suites per endpoint
+- **Flows** — Multi-step API flow diagrams and execution
+- **Diff** — Compare spec versions with severity classification (breaking / non-breaking / additive)
+- **Export** — Download endpoint tables as styled Excel workbooks
+
+## Architecture
+
+Routes stay in root [`app/`](app/). Business logic lives under [`src/`](src/):
+
+```text
+app/                    Next.js App Router (pages + API routes)
+src/
+├── features/           UI feature modules (hooks, components)
+├── domain/             Framework-independent business logic
+├── infrastructure/     Postgres repositories, LLM, proxy handlers
+└── shared/             Pure utilities, errors, shared UI primitives
+lib/                    Compatibility re-exports + playground HTTP, security
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+```mermaid
+flowchart TD
+  pages[app pages] --> features[src/features hooks and components]
+  features --> domain[src/domain]
+  apiRoutes[app/api routes] --> infrastructure[src/infrastructure]
+  infrastructure --> domain
+  domain --> shared[src/shared]
+```
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+See [AGENTS.md](AGENTS.md) for agent-oriented conventions and pitfalls.
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+## Prerequisites
 
-## Learn More
+- Node.js 20+ (Docker image uses Node 24)
+- npm
+- PostgreSQL 16+ (local install or Docker via `npm run docker:db`)
 
-To learn more about Next.js, take a look at the following resources:
+## Setup
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+```bash
+npm install
+cp .env.local.example .env
+npm run docker:db    # optional: Postgres in Docker on port 15432
+npm run db:migrate
+npm run dev
+```
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+Open [http://localhost:3000](http://localhost:3000).
 
-## Deploy on Vercel
+## Development
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+| Command | Description |
+|---------|-------------|
+| `npm run dev` | Dev server (Turbopack) |
+| `npm run build` | Production build |
+| `npm run start` | Run production server |
+| `npm run lint` | ESLint |
+| `npm test` | Unit tests (`tsx --test`) |
+| `npm run db:generate` | Generate Drizzle migrations |
+| `npm run db:migrate` | Run Postgres migrations |
+| `npm run docker:db` | Start Postgres container |
+| `npm run docker:app` | Run app + Postgres in Docker |
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+Migrations also run automatically on server startup via `instrumentation.ts`.
+
+## Database
+
+- **Engine:** PostgreSQL only
+- **Schema:** `src/infrastructure/database/pg-flow-schema.ts`
+- **Migrations:** `drizzle/pg/`
+- **Env:** `DATABASE_URL` (required)
+
+## Docker
+
+```bash
+# Postgres only
+npm run docker:db
+
+# Full stack (set DATABASE_URL in .env for web-only compose, or use overlay)
+docker compose -f docker-compose.db.yml -f docker-compose.postgres.yml up -d --build
+```
+
+See [DOCKER.md](DOCKER.md).
+
+Published image: `seyha2023/list-endpoints-app:latest`
+
+## Environment variables
+
+| Variable | Purpose |
+|----------|---------|
+| `DATABASE_URL` | PostgreSQL connection string (required) |
+| `INTERNAL_APP_URL` | Server-side self-fetch base URL |
+| `OLLAMA_HOST` | LLM endpoint for test-case generation |
+| `ENABLE_LLAMA_GENERATE` | Set `false` to disable `/api/llama-generate` |
+
+## License
+
+Private project (`package.json`).

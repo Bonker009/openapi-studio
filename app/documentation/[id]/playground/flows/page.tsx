@@ -1,48 +1,16 @@
 "use client";
 
-import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { FlowShell } from "@/components/playground/flow-shell";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
-import { fetchData } from "@/lib/data-service";
-import { toast } from "sonner";
+import { usePlaygroundSpec } from "@/src/features/playground/hooks/usePlaygroundSpec";
 
 export default function FlowTestsPage() {
   const params = useParams();
   const id = params?.id as string;
-
-  const [apiData, setApiData] = useState<{
-    info?: { title?: string; version?: string };
-    paths?: Record<string, unknown>;
-    components?: unknown;
-    security?: unknown[];
-    servers?: { url: string; description?: string }[];
-  } | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-
-  useEffect(() => {
-    async function load() {
-      try {
-        setLoading(true);
-        setError(null);
-        const spec = await fetchData("spec", id);
-        if (!spec) {
-          setError(`API specification '${id}' not found`);
-          return;
-        }
-        setApiData(spec);
-      } catch {
-        setError("Failed to load API specification");
-        toast.error("Failed to load flow tests");
-      } finally {
-        setLoading(false);
-      }
-    }
-    if (id) load();
-  }, [id]);
+  const { apiData, loading, error } = usePlaygroundSpec(id);
 
   const title = apiData?.info?.title ?? "Flow tests";
 

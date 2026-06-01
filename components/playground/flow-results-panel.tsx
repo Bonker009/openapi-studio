@@ -1,16 +1,24 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { MethodBadge } from "@/components/method-badge";
 import { LiveJsonTree } from "@/components/playground/live-json-tree";
 import { isJsonTreeValue } from "@/lib/playground/json-format";
-import type { Extraction, FlowStep, StepRunResult } from "@/lib/flows/types";
+import type {
+  Extraction,
+  FlowExecutionMode,
+  FlowStep,
+  StepRunResult,
+} from "@/lib/flows/types";
 import { cn } from "@/lib/utils";
 import {
+  AlertTriangle,
   Check,
+  Clock3,
   Copy,
+  Link2,
   Loader2,
   MousePointerClick,
   Play,
@@ -384,6 +392,94 @@ function ResultsTableGrid({
   );
 }
 
+function DetailStat({
+  label,
+  value,
+  tone,
+}: {
+  label: string;
+  value: string;
+  tone?: "success" | "destructive" | "warning";
+}) {
+  return (
+    <div className="rounded-lg border border-border bg-background px-3 py-2">
+      <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+        {label}
+      </p>
+      <p
+        className={cn(
+          "mt-1 text-sm font-medium tabular-nums",
+          tone === "success" && "text-success",
+          tone === "destructive" && "text-destructive",
+          tone === "warning" && "text-amber-600 dark:text-amber-400"
+        )}
+      >
+        {value}
+      </p>
+    </div>
+  );
+}
+
+function CopyTextButton({
+  value,
+  label = "Copy",
+}: {
+  value: string;
+  label?: string;
+}) {
+  const [copied, setCopied] = useState(false);
+
+  const copy = async () => {
+    try {
+      await navigator.clipboard.writeText(value);
+      setCopied(true);
+      toast.success(`${label} copied`);
+      setTimeout(() => setCopied(false), 1500);
+    } catch {
+      toast.error("Could not copy");
+    }
+  };
+
+  return (
+    <Button
+      type="button"
+      variant="ghost"
+      size="sm"
+      className="h-7 gap-1.5 px-2 text-[11px]"
+      onClick={copy}
+    >
+      {copied ? (
+        <Check className="h-3.5 w-3.5 text-success" />
+      ) : (
+        <Copy className="h-3.5 w-3.5" />
+      )}
+      {copied ? "Copied" : label}
+    </Button>
+  );
+}
+
+function DetailSection({
+  title,
+  children,
+  action,
+}: {
+  title: string;
+  children: React.ReactNode;
+  action?: React.ReactNode;
+}) {
+  return (
+    <section className="rounded-xl border border-border bg-background shadow-sm overflow-hidden">
+      <div className="flex items-center justify-between gap-3 border-b border-border/70 bg-muted/30 px-3 py-2">
+        <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+          {title}
+        </p>
+        {action}
+      </div>
+      <div className="p-3">{children}</div>
+    </section>
+  );
+}
+
 function ResultDetailsPanel({
   row,
   stepsById,
@@ -406,45 +502,50 @@ function ResultDetailsPanel({
 
   const meta = outcomeMeta(row.outcome);
   const captureEntries = Object.entries(row.capturedVars);
+  const canResume =
+    onRunFromStep && (row.outcome === "fail" || row.outcome === "error");
+  const statusTone =
+    meta.tone === "success"
+      ? "success"
+      : meta.tone === "destructive"
+        ? "destructive"
+        : meta.tone === "warning"
+          ? "warning"
+          : undefined;
 
   return (
-    <div className="flex flex-col h-full min-h-0">
-      <div className="shrink-0 border-b border-border px-4 py-3 space-y-2">
-        <div className="flex flex-wrap items-center gap-2">
-          <span className="text-xs text-muted-foreground tabular-nums">
-            Step #{row.index + 1}
-          </span>
-          <MethodBadge method={row.method} />
-          <span className="text-sm font-mono truncate flex-1 min-w-0">
-            {row.path}
-          </span>
-        </div>
-        <div className="flex flex-wrap items-center gap-2">
-          <Badge variant="outline" className={cn("text-[10px]", chipClass(meta.tone))}>
-            {meta.label}
-            {row.status > 0 ? ` · ${row.status}` : ""}
-          </Badge>
-          {row.latencyMs > 0 && (
-            <span className="text-[10px] text-muted-foreground tabular-nums">
-              {row.latencyMs}ms
-            </span>
-          )}
-          {row.roleUsed && (
-            <Badge variant="secondary" className="text-[10px]">
-              {row.roleUsed}
-            </Badge>
-          )}
-        </div>
-        {row.error && (
-          <p className="text-xs text-destructive">{row.error}</p>
-        )}
-        {onRunFromStep &&
-          (row.outcome === "fail" || row.outcome === "error") && (
+    <div className="flex flex-col h-full min-h-0 bg-muted/15">
+      <div className="sticky top-0 z-10 shrink-0 border-b border-border bg-card/95 px-4 py-3 backdrop-blur">
+        <div className="flex items-start justify-between gap-3">
+          <div className="min-w-0 space-y-2">
+            <div className="flex flex-wrap items-center gap-2">
+              <Badge variant="secondary" className="h-6 text-[11px]">
+                Step {row.index + 1}
+              </Badge>
+              <MethodBadge method={row.method} />
+              <Badge
+                variant="outline"
+                className={cn("h-6 text-[11px]", chipClass(meta.tone))}
+              >
+                {meta.label}
+              </Badge>
+            </div>
+            <h3
+              className="text-sm font-semibold leading-snug truncate"
+              title={row.stepName || row.path}
+            >
+              {row.stepName || row.path}
+            </h3>
+            <p className="text-[11px] font-mono text-muted-foreground truncate">
+              {row.method} {row.path}
+            </p>
+          </div>
+          {canResume && (
             <Button
               type="button"
               variant="outline"
               size="sm"
-              className="h-8 gap-1.5 text-xs"
+              className="h-8 shrink-0 gap-1.5 text-xs"
               aria-label={`Run flow from step ${row.index + 1}`}
               onClick={() => onRunFromStep(row.stepId)}
             >
@@ -452,14 +553,42 @@ function ResultDetailsPanel({
               Run from here
             </Button>
           )}
+        </div>
       </div>
 
       <div className="flex-1 min-h-0 overflow-y-auto p-4 space-y-4">
-        {captureEntries.length > 0 && (
-          <div>
-            <p className="text-[10px] font-semibold uppercase text-muted-foreground mb-2">
-              Captures
+        <div className="grid grid-cols-2 gap-2">
+          <DetailStat
+            label="Status"
+            value={row.status > 0 ? String(row.status) : meta.label}
+            tone={statusTone}
+          />
+          <DetailStat
+            label="Latency"
+            value={row.latencyMs > 0 ? `${row.latencyMs}ms` : "—"}
+          />
+          <DetailStat label="Role" value={row.roleUsed ?? "—"} />
+          <DetailStat
+            label="Captures"
+            value={String(captureEntries.length)}
+            tone={captureEntries.length > 0 ? "success" : undefined}
+          />
+        </div>
+
+        {row.error && (
+          <div className="rounded-xl border border-destructive/25 bg-destructive/5 p-3 text-sm text-destructive">
+            <div className="mb-1 flex items-center gap-2 font-medium">
+              <AlertTriangle className="h-4 w-4" />
+              Step issue
+            </div>
+            <p className="whitespace-pre-wrap break-words text-xs leading-relaxed">
+              {row.error}
             </p>
+          </div>
+        )}
+
+        {captureEntries.length > 0 && (
+          <DetailSection title="Captured variables">
             <div className="flex flex-wrap gap-1">
               {captureEntries.map(([k, v]) => (
                 <CaptureChip
@@ -472,34 +601,36 @@ function ResultDetailsPanel({
                 />
               ))}
             </div>
-          </div>
+          </DetailSection>
         )}
 
         {row.resolvedUrl && (
-          <div>
-            <p className="text-[10px] font-semibold uppercase text-muted-foreground mb-1">
-              URL
-            </p>
-            <p className="text-xs font-mono break-all">{row.resolvedUrl}</p>
-          </div>
+          <DetailSection
+            title="Resolved URL"
+            action={<CopyTextButton value={row.resolvedUrl} label="Copy URL" />}
+          >
+            <div className="flex gap-2 rounded-lg bg-muted/50 p-2">
+              <Link2 className="mt-0.5 h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+              <p className="min-w-0 break-all font-mono text-xs leading-relaxed">
+                {row.resolvedUrl}
+              </p>
+            </div>
+          </DetailSection>
         )}
 
         {row.requestPreview && (
-          <div>
-            <p className="text-[10px] font-semibold uppercase text-muted-foreground mb-1">
-              Request
-            </p>
-            <pre className="text-xs font-mono bg-muted/50 rounded p-2 overflow-x-auto max-h-48">
+          <DetailSection
+            title="Request"
+            action={<CopyTextButton value={row.requestPreview} label="Copy" />}
+          >
+            <pre className="max-h-56 overflow-auto rounded-lg bg-muted/50 p-3 font-mono text-xs leading-relaxed whitespace-pre-wrap break-words">
               {row.requestPreview}
             </pre>
-          </div>
+          </DetailSection>
         )}
 
         {row.outcome !== "skipped" && (
-          <div>
-            <p className="text-[10px] font-semibold uppercase text-muted-foreground mb-1">
-              Response
-            </p>
+          <DetailSection title="Response">
             {isJsonTreeValue(row.responseBody) ? (
               <LiveJsonTree
                 value={row.responseBody}
@@ -507,19 +638,69 @@ function ResultDetailsPanel({
                 hideRoot
               />
             ) : row.responseBodyPreview ? (
-              <pre className="text-xs font-mono bg-muted/50 rounded-lg border border-border p-2 overflow-x-auto max-h-[min(40vh,320px)] whitespace-pre-wrap break-words">
+              <pre className="max-h-[min(45vh,420px)] overflow-auto rounded-lg bg-muted/50 p-3 font-mono text-xs leading-relaxed whitespace-pre-wrap break-words">
                 {row.responseBodyPreview}
               </pre>
             ) : (
-              <p className="text-xs text-muted-foreground italic">
+              <p className="flex items-center gap-2 text-xs text-muted-foreground italic">
+                <Clock3 className="h-3.5 w-3.5" />
                 No response body
               </p>
             )}
-          </div>
+          </DetailSection>
         )}
       </div>
     </div>
   );
+}
+
+const MODE_LABELS: Record<FlowExecutionMode, string> = {
+  sequential: "Sequential",
+  parallel: "Parallel",
+  conditional: "Conditional",
+};
+
+const DETAIL_WIDTH_STORAGE_KEY = "flow_results_detail_panel_width";
+const DETAIL_WIDTH_DEFAULT = 520;
+const DETAIL_WIDTH_MIN = 360;
+const LIST_WIDTH_MIN = 280;
+const DETAIL_WIDTH_MAX_RATIO = 0.7;
+const RESIZE_STEP_PX = 12;
+const LG_BREAKPOINT_PX = 1024;
+
+function loadDetailPanelWidth(): number {
+  if (typeof window === "undefined") return DETAIL_WIDTH_DEFAULT;
+  try {
+    const raw = localStorage.getItem(DETAIL_WIDTH_STORAGE_KEY);
+    if (!raw) return DETAIL_WIDTH_DEFAULT;
+    const w = Number(raw);
+    if (!Number.isFinite(w)) return DETAIL_WIDTH_DEFAULT;
+    return Math.max(DETAIL_WIDTH_MIN, w);
+  } catch {
+    return DETAIL_WIDTH_DEFAULT;
+  }
+}
+
+function saveDetailPanelWidth(width: number) {
+  if (typeof window === "undefined") return;
+  try {
+    localStorage.setItem(DETAIL_WIDTH_STORAGE_KEY, String(Math.round(width)));
+  } catch {
+    /* quota */
+  }
+}
+
+function clampDetailWidth(width: number, containerWidth: number): number {
+  if (containerWidth <= 0) {
+    return Math.max(DETAIL_WIDTH_MIN, width);
+  }
+  const maxByRatio = containerWidth * DETAIL_WIDTH_MAX_RATIO;
+  const maxByList = containerWidth - LIST_WIDTH_MIN - 12;
+  const max = Math.max(
+    DETAIL_WIDTH_MIN,
+    Math.min(maxByRatio, maxByList > DETAIL_WIDTH_MIN ? maxByList : maxByRatio)
+  );
+  return Math.min(max, Math.max(DETAIL_WIDTH_MIN, width));
 }
 
 type FlowResultsPanelProps = {
@@ -527,6 +708,7 @@ type FlowResultsPanelProps = {
   runningIndex?: number | null;
   startedAt?: number;
   finishedAt?: number;
+  executionMode?: FlowExecutionMode;
   onRunFromStep?: (stepId: string) => void;
   stepsById?: Map<string, FlowStep>;
 };
@@ -536,10 +718,21 @@ export function FlowResultsPanel({
   runningIndex,
   startedAt,
   finishedAt,
+  executionMode = "sequential",
   onRunFromStep,
   stepsById,
 }: FlowResultsPanelProps) {
   const [selectedStepId, setSelectedStepId] = useState<string | null>(null);
+  const [detailPanelWidth, setDetailPanelWidth] = useState(() =>
+    loadDetailPanelWidth()
+  );
+  const [splitContainerWidth, setSplitContainerWidth] = useState(0);
+  const splitRef = useRef<HTMLDivElement>(null);
+  const saveWidthTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const dragRef = useRef<{ startX: number; startWidth: number } | null>(null);
+
+  const isSplitResizable =
+    splitContainerWidth >= LG_BREAKPOINT_PX && splitContainerWidth > 0;
 
   const rows = useMemo(() => sortedResults(results), [results]);
 
@@ -558,6 +751,87 @@ export function FlowResultsPanel({
       return defaultSelectedStepId(results);
     });
   }, [results]);
+
+  useEffect(() => {
+    const el = splitRef.current;
+    if (!el) return;
+    const ro = new ResizeObserver((entries) => {
+      const w = entries[0]?.contentRect.width ?? 0;
+      setSplitContainerWidth(w);
+    });
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
+
+  useEffect(() => {
+    if (!isSplitResizable) return;
+    setDetailPanelWidth((prev) => clampDetailWidth(prev, splitContainerWidth));
+  }, [splitContainerWidth, isSplitResizable]);
+
+  const scheduleSaveWidth = useCallback((width: number) => {
+    if (saveWidthTimerRef.current) clearTimeout(saveWidthTimerRef.current);
+    saveWidthTimerRef.current = setTimeout(() => {
+      saveDetailPanelWidth(width);
+    }, 200);
+  }, []);
+
+  const setDetailWidthClamped = useCallback(
+    (next: number) => {
+      const clamped = clampDetailWidth(next, splitContainerWidth);
+      setDetailPanelWidth(clamped);
+      scheduleSaveWidth(clamped);
+    },
+    [splitContainerWidth, scheduleSaveWidth]
+  );
+
+  const onSplitResizePointerDown = useCallback(
+    (e: React.PointerEvent) => {
+      if (!isSplitResizable) return;
+      e.preventDefault();
+      dragRef.current = { startX: e.clientX, startWidth: detailPanelWidth };
+      const target = e.currentTarget as HTMLElement;
+      target.setPointerCapture(e.pointerId);
+
+      const onMove = (ev: PointerEvent) => {
+        if (!dragRef.current) return;
+        const delta = dragRef.current.startX - ev.clientX;
+        setDetailWidthClamped(dragRef.current.startWidth + delta);
+      };
+
+      const onUp = (ev: PointerEvent) => {
+        dragRef.current = null;
+        target.releasePointerCapture(ev.pointerId);
+        window.removeEventListener("pointermove", onMove);
+        window.removeEventListener("pointerup", onUp);
+      };
+
+      window.addEventListener("pointermove", onMove);
+      window.addEventListener("pointerup", onUp);
+    },
+    [detailPanelWidth, isSplitResizable, setDetailWidthClamped]
+  );
+
+  const onSplitResizeKeyDown = useCallback(
+    (e: React.KeyboardEvent) => {
+      if (!isSplitResizable) return;
+      if (e.key === "ArrowLeft") {
+        e.preventDefault();
+        setDetailWidthClamped(detailPanelWidth + RESIZE_STEP_PX);
+      } else if (e.key === "ArrowRight") {
+        e.preventDefault();
+        setDetailWidthClamped(detailPanelWidth - RESIZE_STEP_PX);
+      } else if (e.key === "Home" || e.key === "Enter") {
+        e.preventDefault();
+        setDetailWidthClamped(DETAIL_WIDTH_DEFAULT);
+      } else if (e.key === "End") {
+        e.preventDefault();
+        setDetailWidthClamped(
+          clampDetailWidth(splitContainerWidth, splitContainerWidth)
+        );
+      }
+    },
+    [detailPanelWidth, isSplitResizable, setDetailWidthClamped, splitContainerWidth]
+  );
 
   if (results.length === 0) {
     return (
@@ -579,6 +853,14 @@ export function FlowResultsPanel({
   return (
     <div className="flex flex-col h-full min-h-0">
       <div className="shrink-0 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground border-b border-border px-4 py-3">
+        <Badge variant="outline" className="text-[10px] h-5 font-normal capitalize">
+          {MODE_LABELS[executionMode]}
+        </Badge>
+        {executionMode === "parallel" && (
+          <span className="text-[10px] text-muted-foreground">
+            Steps ran concurrently
+          </span>
+        )}
         <span className="text-success font-medium">{passed} passed</span>
         {failed > 0 && (
           <span className="text-destructive font-medium">{failed} failed</span>
@@ -597,8 +879,11 @@ export function FlowResultsPanel({
         )}
       </div>
 
-      <div className="flex flex-1 min-h-0 flex-col lg:flex-row">
-        <div className="flex-1 min-h-0 overflow-y-auto p-4 min-w-0">
+      <div
+        ref={splitRef}
+        className="flex flex-1 min-h-0 flex-col lg:flex-row"
+      >
+        <div className="flex-1 min-h-0 overflow-y-auto p-4 min-w-0 lg:min-w-[200px]">
           <ResultsTableGrid
             rows={rows}
             selectedStepId={selectedStepId}
@@ -608,8 +893,40 @@ export function FlowResultsPanel({
           />
         </div>
 
+        <div
+          role="separator"
+          aria-orientation="vertical"
+          aria-valuenow={Math.round(detailPanelWidth)}
+          aria-valuemin={DETAIL_WIDTH_MIN}
+          aria-valuemax={Math.round(
+            clampDetailWidth(splitContainerWidth, splitContainerWidth)
+          )}
+          aria-label="Resize step details panel"
+          tabIndex={isSplitResizable ? 0 : -1}
+          className={cn(
+            "group hidden lg:flex shrink-0 w-2 touch-none cursor-col-resize items-center justify-center",
+            "bg-border/40 hover:bg-primary/25 focus-visible:bg-primary/35 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 focus-visible:ring-inset",
+            isSplitResizable ? "opacity-100" : "opacity-0 pointer-events-none"
+          )}
+          onPointerDown={onSplitResizePointerDown}
+          onKeyDown={onSplitResizeKeyDown}
+        >
+          <div
+            className="w-0.5 h-10 rounded-full bg-border/80 group-hover:bg-primary/60 group-focus-visible:bg-primary/70"
+            aria-hidden
+          />
+        </div>
+
         <aside
-          className="w-full lg:w-[min(420px,42%)] lg:max-w-md shrink-0 border-t lg:border-t-0 lg:border-l border-border bg-card/50 min-h-[240px] lg:min-h-0 flex flex-col"
+          className={cn(
+            "w-full shrink-0 border-t lg:border-t-0 lg:border-l border-border bg-card/50",
+            "min-h-[320px] lg:min-h-0 flex flex-col"
+          )}
+          style={
+            isSplitResizable
+              ? { width: detailPanelWidth, maxWidth: "100%" }
+              : undefined
+          }
           aria-label="Step details"
         >
           <ResultDetailsPanel

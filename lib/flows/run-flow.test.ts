@@ -4,8 +4,8 @@ import {
   getByPath,
   resolveString,
   extractTokenRefs,
-  type RunContext,
 } from "@/lib/flows/resolve-refs";
+import { createRunContext, type RunContext } from "@/lib/flows/types";
 import { computeDependencyEdges } from "@/lib/flows/graph";
 import { flowLoginCredential, runFlow, type FlowExecutor } from "@/lib/flows/run-flow";
 import { keyPathToAccessor } from "@/lib/flows/payload-tree";
@@ -33,7 +33,7 @@ describe("getByPath", () => {
 });
 
 describe("resolveString", () => {
-  const ctx: RunContext = {
+  const ctx: RunContext = createRunContext({
     vars: { productId: "abc", count: 3 },
     steps: [
       {
@@ -42,7 +42,7 @@ describe("resolveString", () => {
         body: { data: [{ id: 42 }] },
       },
     ],
-  };
+  });
 
   it("resolves vars and step refs", () => {
     assert.equal(resolveString("{{vars.productId}}", ctx).value, "abc");
@@ -414,10 +414,10 @@ describe("runFlow", () => {
       execute,
       startIndex: 1,
       priorResults: [priorStep0],
-      seedContext: {
+      seedContext: createRunContext({
         vars: { pid: "seeded-1" },
         steps: [{ status: 200, headers: {}, body: { data: [{ id: "seeded-1" }] } }],
-      },
+      }),
     });
 
     assert.equal(calls.length, 1);
@@ -499,8 +499,11 @@ describe("runFlow", () => {
       ...makeFlow([], "stop"),
       auth: { loginStepId: "s1", tokenVar: "token" },
     };
-    assert.equal(flowLoginCredential(flow, { vars: {}, steps: [] }), null);
-    const cred = flowLoginCredential(flow, { vars: { token: "abc" }, steps: [] });
+    assert.equal(flowLoginCredential(flow, createRunContext()), null);
+    const cred = flowLoginCredential(
+      flow,
+      createRunContext({ vars: { token: "abc" } })
+    );
     assert.equal(cred?.type === "bearer" ? cred.token : null, "abc");
   });
 
@@ -537,6 +540,128 @@ describe("runFlow", () => {
 
     assert.equal(result.context?.vars.pid, "ctx-1");
     assert.equal(result.context?.steps[0]?.status, 200);
+  });
+
+  it("parallel mode runs steps concurrently", async () => {
+    const endpoints = [
+      ep("GET", "/a"),
+      ep("GET", "/b"),
+      ep("GET", "/c"),
+    ];
+    let inFlight = 0;
+    let maxInFlight = 0;
+    const execute: FlowExecutor = async (): Promise<HttpRequestResult> => {
+      inFlight++;
+      maxInFlight = Math.max(maxInFlight, inFlight);
+      await new Promise((r) => setTimeout(r, 40));
+      inFlight--;
+      return {
+        data: {},
+        status: 200,
+        statusText: "OK",
+        headers: {},
+        responseTime: 1,
+      };
+    };
+
+    const flow = {
+      ...makeFlow(
+        [
+          {
+            id: "s1",
+            endpointKey: flowEndpointKey(endpoints[0]),
+            paramValues: {},
+            headerValues: {},
+            extractions: [],
+          },
+          {
+            id: "s2",
+            endpointKey: flowEndpointKey(endpoints[1]),
+            paramValues: {},
+            headerValues: {},
+            extractions: [],
+          },
+          {
+            id: "s3",
+            endpointKey: flowEndpointKey(endpoints[2]),
+            paramValues: {},
+            headerValues: {},
+            extractions: [],
+          },
+        ],
+        "stop"
+      ),
+      executionMode: "parallel" as const,
+    };
+
+    const result = await runFlow({
+      flow,
+      endpoints,
+      baseUrl: "http://api.test",
+      credentials: [],
+      defaultCredential: null,
+      execute,
+    });
+
+    assert.equal(result.outcome, "pass");
+    assert.equal(result.steps.length, 3);
+    assert.ok(
+      maxInFlight >= 2,
+      `expected concurrent execution, max in-flight was ${maxInFlight}`
+    );
+  });
+
+  it("conditional mode skips step when condition is falsy", async () => {
+    const endpoints = [ep("GET", "/a"), ep("GET", "/b")];
+    const calls: string[] = [];
+    const execute: FlowExecutor = async (url): Promise<HttpRequestResult> => {
+      calls.push(url);
+      return {
+        data: {},
+        status: 200,
+        statusText: "OK",
+        headers: {},
+        responseTime: 1,
+      };
+    };
+
+    const flow = {
+      ...makeFlow(
+        [
+          {
+            id: "s1",
+            endpointKey: flowEndpointKey(endpoints[0]),
+            paramValues: {},
+            headerValues: {},
+            extractions: [],
+          },
+          {
+            id: "s2",
+            endpointKey: flowEndpointKey(endpoints[1]),
+            paramValues: {},
+            headerValues: {},
+            extractions: [],
+            condition: "{{vars.skipMe}}",
+          },
+        ],
+        "stop"
+      ),
+      executionMode: "conditional" as const,
+    };
+
+    const result = await runFlow({
+      flow,
+      endpoints,
+      baseUrl: "http://api.test",
+      credentials: [],
+      defaultCredential: null,
+      execute,
+    });
+
+    assert.equal(calls.length, 1);
+    assert.equal(result.steps[0].outcome, "pass");
+    assert.equal(result.steps[1].outcome, "skipped");
+    assert.match(result.steps[1].error ?? "", /Condition|Unresolved/i);
   });
 });
 

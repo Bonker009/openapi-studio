@@ -1,0 +1,10 @@
+# App + local Postgres:
+#   docker compose -f docker-compose.db.yml -f docker-compose.postgres.yml up -d --build
+
+services:
+  web:
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgresql://app:app@db:5432/flows

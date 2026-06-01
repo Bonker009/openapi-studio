@@ -1,5 +1,6 @@
 import type { DiffSummary } from "@/lib/openapi-diff";
 import type { Flow } from "@/lib/flows/types";
+import type { FlowRunResult } from "@/domain/flows/types";
 import { getRequestBaseUrl } from "@/lib/request-base-url";
 
 export type DataType = "spec" | "status" | "settings";
@@ -244,6 +245,18 @@ export async function deleteFlow(specId: string, flowId: string): Promise<void> 
     method: "DELETE",
   });
   if (!response.ok) throw new Error("Failed to delete flow");
+}
+
+export async function persistFlowRun(flow: Flow, run: FlowRunResult): Promise<void> {
+  const base = getRequestBaseUrl();
+  const response = await fetch(`${base}/api/data/flow-runs`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ flow, run }),
+  });
+  if (!response.ok) {
+    throw new Error("Failed to persist flow run metadata");
+  }
 }
 
 export async function deleteVersion(id: string, ts: string) {

@@ -24,6 +24,18 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
+import {
   Dialog,
   DialogContent,
   DialogDescription,
@@ -56,6 +68,7 @@ import { orderSteps } from "@/lib/flows/order";
 import type { RunContext } from "@/lib/flows/resolve-refs";
 import { getStepPayload, type StepPayload } from "@/lib/flows/payload-tree";
 import {
+  persistFlowRun,
   deleteFlow,
   listFlows,
   saveFlow,
@@ -64,6 +77,7 @@ import {
   emptyFlow,
   flowEndpointKey,
   type Flow,
+  type FlowExecutionMode,
   type FlowRunResult,
   type StepRunResult,
 } from "@/lib/flows/types";
@@ -186,6 +200,8 @@ export function FlowShell({
     [endpoints]
   );
 
+  const executionMode = draft.executionMode ?? "sequential";
+
   useEffect(() => {
     if (!hasSeenFlowTutorial(specId)) {
       setTutorialOpen(true);
@@ -284,6 +300,11 @@ export function FlowShell({
     startStepId?: string;
   }) => {
     const { stepThrough = false, startStepId } = options ?? {};
+    const executionMode = draft.executionMode ?? "sequential";
+    if (stepThrough && executionMode === "parallel") {
+      toast.error("Step through is not available in parallel mode");
+      return;
+    }
     if (draft.steps.length === 0) {
       toast.error("Add at least one step to run");
       return;
@@ -379,6 +400,9 @@ export function FlowShell({
       setRunFinishedAt(Date.now());
       lastContextRef.current = result.context ?? null;
       runOrderIdsRef.current = orderedIds;
+      void persistFlowRun({ ...draft, steps: ordered }, result).catch((error) => {
+        console.warn("Failed to persist flow run metadata:", error);
+      });
 
       if (result.outcome === "pass") {
         toast.success("Flow completed successfully");
@@ -485,7 +509,9 @@ export function FlowShell({
 
   const firstFailedStepId = useMemo(() => {
     const failed = runResults.find(
-      (r) => r.outcome === "fail" || r.outcome === "error"
+      (r) =>
+        r != null &&
+        (r.outcome === "fail" || r.outcome === "error")
     );
     return failed?.stepId ?? null;
   }, [runResults]);
@@ -596,17 +622,53 @@ export function FlowShell({
                     Resume from failed
                   </Button>
                 )}
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="h-8 gap-1.5 text-xs"
-                  onClick={() => void handleRun({ stepThrough: true })}
-                  disabled={draft.steps.length === 0}
-                  title="Run and pause after every step"
+                <Select
+                  value={executionMode}
+                  onValueChange={(v) =>
+                    setDraft((prev) => ({
+                      ...prev,
+                      executionMode: v as FlowExecutionMode,
+                      updatedAt: Date.now(),
+                    }))
+                  }
+                  disabled={running}
                 >
-                  <StepForward className="h-3.5 w-3.5" />
-                  Step through
-                </Button>
+                  <SelectTrigger
+                    className="h-8 w-[7.5rem] text-xs"
+                    aria-label="Execution mode"
+                  >
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="sequential">Sequential</SelectItem>
+                    <SelectItem value="parallel">Parallel</SelectItem>
+                    <SelectItem value="conditional">Conditional</SelectItem>
+                  </SelectContent>
+                </Select>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <span className="inline-flex">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="h-8 gap-1.5 text-xs"
+                        onClick={() => void handleRun({ stepThrough: true })}
+                        disabled={
+                          draft.steps.length === 0 ||
+                          executionMode === "parallel"
+                        }
+                      >
+                        <StepForward className="h-3.5 w-3.5" />
+                        Step through
+                      </Button>
+                    </span>
+                  </TooltipTrigger>
+                  {executionMode === "parallel" && (
+                    <TooltipContent side="bottom">
+                      Not available in parallel mode
+                    </TooltipContent>
+                  )}
+                </Tooltip>
                 <Button
                   size="sm"
                   className="h-8 gap-1.5 text-xs"
@@ -698,6 +760,7 @@ export function FlowShell({
                 runningIndex={runningIndex}
                 startedAt={runStartedAt}
                 finishedAt={runFinishedAt}
+                executionMode={executionMode}
                 onRunFromStep={handleRunFromStep}
                 stepsById={stepsById}
               />

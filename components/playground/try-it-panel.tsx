@@ -400,7 +400,7 @@ export function TryItPanel({
       toast.error(msg);
     } finally {
       setLoading(false);
-      setActiveTab("response");
+      setActiveTab("request");
     }
   };
 
@@ -641,184 +641,223 @@ export function TryItPanel({
         >
           <TabsList className="h-9 shrink-0 w-fit mb-3">
             <TabsTrigger value="request" className="text-xs">
-              Request
+              Request & Response
             </TabsTrigger>
             <TabsTrigger value="samples" className="text-xs">
               Samples
-            </TabsTrigger>
-            <TabsTrigger value="response" className="text-xs">
-              Response
             </TabsTrigger>
           </TabsList>
 
           <TabsContent
             value="request"
-            className="flex-1 min-h-0 overflow-y-auto mt-0 space-y-4 data-[state=inactive]:hidden"
+            className="flex-1 min-h-0 overflow-hidden mt-0 data-[state=inactive]:hidden"
           >
-            {pathParams.length > 0 && (
-              <div>
-                <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground mb-2">
-                  Path
-                </p>
-                {renderParamFields(pathParams, "path")}
-              </div>
-            )}
-            {queryParams.length > 0 && (
-              <div>
-                <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground mb-2">
-                  Query
-                </p>
-                {renderParamFields(queryParams, "query")}
-              </div>
-            )}
-            {headerParams.length > 0 && (
-              <div>
-                <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground mb-2">
-                  Headers
-                </p>
-                {renderParamFields(headerParams, "header")}
-              </div>
-            )}
-            {pathParams.length === 0 &&
-              queryParams.length === 0 &&
-              headerParams.length === 0 && (
-                <p className="text-xs text-muted-foreground">
-                  This operation has no parameters.
-                </p>
-              )}
-
-            {authWarning && (
-              <div className="rounded-lg border border-warning/30 bg-warning/10 px-3 py-2 text-xs text-warning">
-                This endpoint requires a Bearer token. Add or select a role token
-                in the toolbar above.
-              </div>
-            )}
-            {endpoint.hasRequestBody ? (
-              <div className="space-y-2">
-                <Label
-                  id="request-body-label"
-                  className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground"
-                >
-                  Body
-                  {requestBodyInfo.contentType && (
-                    <span className="font-mono font-normal normal-case ml-2 text-muted-foreground">
-                      ({requestBodyInfo.contentType})
-                    </span>
-                  )}
-                </Label>
-                {bodyKind === "json" && (
-                  <>
-                    <div className="flex flex-wrap gap-2">
-                      <Button
-                        type="button"
-                        variant="outline"
-                        size="sm"
-                        className="h-7 text-xs gap-1"
-                        onClick={formatBody}
-                      >
-                        <AlignLeft className="h-3.5 w-3.5" />
-                        Format JSON
-                      </Button>
-                      <Button
-                        type="button"
-                        variant="outline"
-                        size="sm"
-                        className="h-7 text-xs gap-1"
-                        onClick={resetSampleBody}
-                      >
-                        <RotateCcw className="h-3.5 w-3.5" />
-                        Reset to sample
-                      </Button>
-                    </div>
-                    <JsonBodyEditorLazy
-                      value={requestBody}
-                      onChange={setRequestBody}
-                      minHeight="220px"
-                      aria-labelledby="request-body-label"
-                    />
-                  </>
-                )}
-                {bodyKind === "multipart" && (
-                  <>
-                    <div className="flex flex-wrap gap-2">
-                      <Button
-                        type="button"
-                        variant="outline"
-                        size="sm"
-                        className="h-7 text-xs gap-1"
-                        onClick={resetSampleBody}
-                      >
-                        <RotateCcw className="h-3.5 w-3.5" />
-                        Reset fields
-                      </Button>
-                    </div>
-                    <MultipartBodyEditor
-                      state={multipartState}
-                      onChange={setMultipartState}
-                    />
-                  </>
-                )}
-                {bodyKind === "binary" && (
-                  <div className="space-y-2">
-                    <input
-                      type="file"
-                      className="text-sm"
-                      onChange={(e) =>
-                        setBinaryFile(e.target.files?.[0] ?? null)
-                      }
-                    />
-                    {binaryFile && (
-                      <p className="text-xs text-muted-foreground font-mono">
-                        {binaryFile.name} ({(binaryFile.size / 1024).toFixed(1)}{" "}
-                        KB)
+            <div className="grid h-full min-h-0 gap-4 xl:grid-cols-[minmax(0,0.95fr)_minmax(420px,1.05fr)]">
+              <div className="min-h-0 overflow-y-auto space-y-4 pr-1">
+                <div className="rounded-xl border border-border bg-background p-4 space-y-4">
+                  <div className="flex items-center justify-between gap-3">
+                    <div>
+                      <p className="text-xs font-semibold text-foreground">
+                        Request
                       </p>
+                      <p className="text-[11px] text-muted-foreground">
+                        Configure parameters, auth headers, and body.
+                      </p>
+                    </div>
+                    {responseStatus != null && (
+                      <span className="rounded-full bg-muted px-2 py-1 text-[11px] text-muted-foreground tabular-nums">
+                        Last {responseStatus}
+                        {responseTime != null && ` · ${responseTime} ms`}
+                      </span>
                     )}
                   </div>
-                )}
-              </div>
-            ) : (
-              <p className="text-xs text-muted-foreground">
-                This operation has no request body.
-              </p>
-            )}
-            <Collapsible open={curlOpen} onOpenChange={setCurlOpen}>
-              <div className="flex items-center justify-between gap-2">
-                <CollapsibleTrigger asChild>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    className="h-8 text-xs gap-1 px-2"
-                  >
-                    cURL
-                    {curlOpen ? (
-                      <ChevronUp className="h-3.5 w-3.5" />
-                    ) : (
-                      <ChevronDown className="h-3.5 w-3.5" />
+
+                  {pathParams.length > 0 && (
+                    <div>
+                      <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground mb-2">
+                        Path
+                      </p>
+                      {renderParamFields(pathParams, "path")}
+                    </div>
+                  )}
+                  {queryParams.length > 0 && (
+                    <div>
+                      <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground mb-2">
+                        Query
+                      </p>
+                      {renderParamFields(queryParams, "query")}
+                    </div>
+                  )}
+                  {headerParams.length > 0 && (
+                    <div>
+                      <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground mb-2">
+                        Headers
+                      </p>
+                      {renderParamFields(headerParams, "header")}
+                    </div>
+                  )}
+                  {pathParams.length === 0 &&
+                    queryParams.length === 0 &&
+                    headerParams.length === 0 && (
+                      <p className="text-xs text-muted-foreground">
+                        This operation has no parameters.
+                      </p>
                     )}
-                  </Button>
-                </CollapsibleTrigger>
-                {curlOpen && (
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className="h-7 text-xs gap-1"
-                    onClick={copyCurl}
-                  >
-                    {curlCopied ? (
-                      <Check className="h-3.5 w-3.5" />
-                    ) : (
-                      <Copy className="h-3.5 w-3.5" />
+
+                  {authWarning && (
+                    <div className="rounded-lg border border-warning/30 bg-warning/10 px-3 py-2 text-xs text-warning">
+                      This endpoint requires a Bearer token. Add or select a role
+                      token in the toolbar above.
+                    </div>
+                  )}
+                </div>
+
+                <div className="rounded-xl border border-border bg-background p-4 space-y-3">
+                  {endpoint.hasRequestBody ? (
+                    <div className="space-y-2">
+                      <Label
+                        id="request-body-label"
+                        className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground"
+                      >
+                        Body
+                        {requestBodyInfo.contentType && (
+                          <span className="font-mono font-normal normal-case ml-2 text-muted-foreground">
+                            ({requestBodyInfo.contentType})
+                          </span>
+                        )}
+                      </Label>
+                      {bodyKind === "json" && (
+                        <>
+                          <div className="flex flex-wrap gap-2">
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="sm"
+                              className="h-7 text-xs gap-1"
+                              onClick={formatBody}
+                            >
+                              <AlignLeft className="h-3.5 w-3.5" />
+                              Format JSON
+                            </Button>
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="sm"
+                              className="h-7 text-xs gap-1"
+                              onClick={resetSampleBody}
+                            >
+                              <RotateCcw className="h-3.5 w-3.5" />
+                              Reset to sample
+                            </Button>
+                          </div>
+                          <JsonBodyEditorLazy
+                            value={requestBody}
+                            onChange={setRequestBody}
+                            minHeight="220px"
+                            aria-labelledby="request-body-label"
+                          />
+                        </>
+                      )}
+                      {bodyKind === "multipart" && (
+                        <>
+                          <div className="flex flex-wrap gap-2">
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="sm"
+                              className="h-7 text-xs gap-1"
+                              onClick={resetSampleBody}
+                            >
+                              <RotateCcw className="h-3.5 w-3.5" />
+                              Reset fields
+                            </Button>
+                          </div>
+                          <MultipartBodyEditor
+                            state={multipartState}
+                            onChange={setMultipartState}
+                          />
+                        </>
+                      )}
+                      {bodyKind === "binary" && (
+                        <div className="space-y-2">
+                          <input
+                            type="file"
+                            className="text-sm"
+                            onChange={(e) =>
+                              setBinaryFile(e.target.files?.[0] ?? null)
+                            }
+                          />
+                          {binaryFile && (
+                            <p className="text-xs text-muted-foreground font-mono">
+                              {binaryFile.name} ({" "}
+                              {(binaryFile.size / 1024).toFixed(1)} KB)
+                            </p>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  ) : (
+                    <p className="text-xs text-muted-foreground">
+                      This operation has no request body.
+                    </p>
+                  )}
+                </div>
+
+                <Collapsible
+                  open={curlOpen}
+                  onOpenChange={setCurlOpen}
+                  className="rounded-xl border border-border bg-background p-3"
+                >
+                  <div className="flex items-center justify-between gap-2">
+                    <CollapsibleTrigger asChild>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="h-8 text-xs gap-1 px-2"
+                      >
+                        cURL
+                        {curlOpen ? (
+                          <ChevronUp className="h-3.5 w-3.5" />
+                        ) : (
+                          <ChevronDown className="h-3.5 w-3.5" />
+                        )}
+                      </Button>
+                    </CollapsibleTrigger>
+                    {curlOpen && (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="h-7 text-xs gap-1"
+                        onClick={copyCurl}
+                      >
+                        {curlCopied ? (
+                          <Check className="h-3.5 w-3.5" />
+                        ) : (
+                          <Copy className="h-3.5 w-3.5" />
+                        )}
+                        Copy
+                      </Button>
                     )}
-                    Copy
-                  </Button>
-                )}
+                  </div>
+                  <CollapsibleContent className="mt-2">
+                    <pre className="text-[11px] font-mono bg-card rounded-md border p-3 overflow-x-auto whitespace-pre-wrap break-all">
+                      {curlCommand}
+                    </pre>
+                  </CollapsibleContent>
+                </Collapsible>
               </div>
-              <CollapsibleContent className="mt-2">
-                <pre className="text-[11px] font-mono bg-card rounded-md border p-3 overflow-x-auto whitespace-pre-wrap break-all">
-                  {curlCommand}
-                </pre>
-              </CollapsibleContent>
-            </Collapsible>
+
+              <div className="min-h-[360px] xl:min-h-0 overflow-hidden rounded-xl border border-border bg-background">
+                <ResponseViewer
+                  embedded
+                  status={responseStatus}
+                  responseTime={responseTime}
+                  body={responseBody}
+                  headers={responseHeaders}
+                  placeholder="Execute the request to see the response here"
+                />
+              </div>
+            </div>
           </TabsContent>
 
           <TabsContent
@@ -834,18 +873,6 @@ export function TryItPanel({
             )}
           </TabsContent>
 
-          <TabsContent
-            value="response"
-            className="flex-1 min-h-0 flex flex-col mt-0 -mx-6 overflow-hidden data-[state=inactive]:hidden"
-          >
-            <ResponseViewer
-              embedded
-              status={responseStatus}
-              responseTime={responseTime}
-              body={responseBody}
-              headers={responseHeaders}
-            />
-          </TabsContent>
         </Tabs>
 
         <div className="shrink-0 sticky bottom-0 z-10 border-t border-border bg-card px-6 py-3 flex flex-wrap items-center gap-3">

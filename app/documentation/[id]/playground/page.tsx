@@ -1,62 +1,16 @@
 "use client";
 
-import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { PlaygroundShell } from "@/components/playground/playground-shell";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
-import { fetchData } from "@/lib/data-service";
-import { toast } from "sonner";
+import { usePlaygroundSpec } from "@/src/features/playground/hooks/usePlaygroundSpec";
 
 export default function PlaygroundPage() {
   const params = useParams();
   const id = params?.id as string;
-
-  const [apiData, setApiData] = useState<{
-    info?: { title?: string; version?: string };
-    paths?: Record<string, unknown>;
-    components?: unknown;
-    servers?: { url: string; description?: string }[];
-  } | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [workingPaths, setWorkingPaths] = useState<Set<string> | undefined>();
-
-  useEffect(() => {
-    async function load() {
-      try {
-        setLoading(true);
-        setError(null);
-        const spec = await fetchData("spec", id);
-        if (!spec) {
-          setError(`API specification '${id}' not found`);
-          return;
-        }
-        setApiData(spec);
-        const statusData = await fetchData("status", id);
-        if (Array.isArray(statusData)) {
-          const working = new Set<string>();
-          for (const row of statusData as {
-            path: string;
-            method: string;
-            working: boolean;
-          }[]) {
-            if (row.working) {
-              working.add(`${row.method.toLowerCase()}:${row.path}`);
-            }
-          }
-          setWorkingPaths(working);
-        }
-      } catch {
-        setError("Failed to load API specification");
-        toast.error("Failed to load playground");
-      } finally {
-        setLoading(false);
-      }
-    }
-    if (id) load();
-  }, [id]);
+  const { apiData, workingPaths, loading, error } = usePlaygroundSpec(id);
 
   const title = apiData?.info?.title ?? "API Playground";
 

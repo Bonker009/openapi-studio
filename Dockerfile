@@ -1,66 +1,52 @@
-# Stage 1: Dependencies
+# syntax=docker/dockerfile:1
+
 FROM node:24-alpine AS deps
-RUN apk add --no-cache libc6-compat python3 make g++
+RUN apk add --no-cache libc6-compat
 WORKDIR /app
-
-# Copy package files
 COPY package.json package-lock.json* ./
-
-# Install dependencies
 RUN npm ci
 
-# Stage 2: Builder (must match deps Node major — native modules are ABI-bound)
 FROM node:24-alpine AS builder
-RUN apk add --no-cache python3 make g++
 WORKDIR /app
-
-# Copy dependencies from deps stage
 COPY --from=deps /app/node_modules ./node_modules
-
-# Copy source code
 COPY . .
-
-# Rebuild native addons for this stage's Node ABI
-RUN npm rebuild better-sqlite3
-
-# Set environment to production
 ENV NEXT_TELEMETRY_DISABLED=1
-
-# Build the application
 RUN npm run build
 
-# Stage 3: Runner (same Node major as deps/builder)
+FROM builder AS externals
+RUN mkdir -p /opt/externals \
+  && cd /app/node_modules \
+  && for pkg in pg pg-pool pg-protocol pg-types pg-connection-string pg-int8 postgres-array postgres-bytea postgres-date postgres-interval xtend; do \
+       if [ -d "$pkg" ]; then cp -a "$pkg" "/opt/externals/$pkg"; fi; \
+     done
+
 FROM node:24-alpine AS runner
 RUN apk add --no-cache su-exec
 WORKDIR /app
 
 ENV NODE_ENV=production
 ENV NEXT_TELEMETRY_DISABLED=1
+ENV PORT=3000
+ENV HOSTNAME=0.0.0.0
+ENV NODE_OPTIONS=--dns-result-order=ipv4first
+ENV INTERNAL_APP_URL=http://127.0.0.1:3000
 
-# Create a non-root user
-RUN addgroup --system --gid 1001 nodejs
-RUN adduser --system --uid 1001 nextjs
+RUN addgroup --system --gid 1001 nodejs \
+  && adduser --system --uid 1001 nextjs
 
-# Copy necessary files from builder
 COPY --from=builder /app/public ./public
 COPY --from=builder --chown=nextjs:nodejs /app/.next/standalone ./
 COPY --from=builder --chown=nextjs:nodejs /app/.next/static ./.next/static
 COPY --from=builder --chown=nextjs:nodejs /app/package.json ./package.json
-COPY --from=builder --chown=nextjs:nodejs /app/drizzle ./drizzle
-COPY --from=builder --chown=nextjs:nodejs /app/node_modules/better-sqlite3 ./node_modules/better-sqlite3
+COPY --from=builder --chown=nextjs:nodejs /app/drizzle/pg ./drizzle/pg
+COPY --from=externals --chown=nextjs:nodejs /opt/externals/ ./node_modules/
 
 COPY docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh
-RUN chmod +x /usr/local/bin/docker-entrypoint.sh \
-  && mkdir -p /app/data \
-  && chown nextjs:nodejs /app/data
+RUN chmod +x /usr/local/bin/docker-entrypoint.sh
 
 EXPOSE 3000
 
-ENV PORT=3000
-ENV HOSTNAME="0.0.0.0"
-ENV DATA_DIR=/app/data
-ENV NODE_OPTIONS="--dns-result-order=ipv4first"
-ENV INTERNAL_APP_URL="http://127.0.0.1:3000"
+HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
+  CMD node -e "require('http').get('http://127.0.0.1:3000/', (r) => process.exit(r.statusCode === 200 ? 0 : 1)).on('error', () => process.exit(1))"
 
 ENTRYPOINT ["/usr/local/bin/docker-entrypoint.sh"]
-
