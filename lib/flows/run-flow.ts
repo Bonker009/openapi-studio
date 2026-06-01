@@ -76,8 +76,30 @@ export type PauseDecision = {
   extraCaptures?: Extraction[];
 };
 
+const FLOW_LOGIN_CREDENTIAL_ID = "__flow_login__";
+const FLOW_LOGIN_ROLE = "Login token";
+
+/** Runtime-only bearer from a captured login token (never persisted). */
+export function flowLoginCredential(
+  flow: Flow,
+  ctx: RunContext
+): Credential | null {
+  const a = flow.auth;
+  if (!a?.tokenVar) return null;
+  const token = ctx.vars[a.tokenVar];
+  if (token == null || token === "") return null;
+  return {
+    id: FLOW_LOGIN_CREDENTIAL_ID,
+    name: FLOW_LOGIN_ROLE,
+    type: "bearer",
+    token: String(token),
+  };
+}
+
 function resolveCredential(
   step: FlowStep,
+  flow: Flow,
+  ctx: RunContext,
   credentials: Credential[],
   defaultCredential: Credential | null
 ): { credential: Credential | null; roleUsed: string; missingRole: boolean } {
@@ -85,6 +107,16 @@ function resolveCredential(
   if (!name || name === "No auth") {
     if (name === "No auth") {
       return { credential: null, roleUsed: "No auth", missingRole: false };
+    }
+    const isLoginStep = flow.auth?.loginStepId === step.id;
+    const loginCred =
+      !isLoginStep ? flowLoginCredential(flow, ctx) : null;
+    if (loginCred) {
+      return {
+        credential: loginCred,
+        roleUsed: FLOW_LOGIN_ROLE,
+        missingRole: false,
+      };
     }
     return {
       credential: defaultCredential,
@@ -180,7 +212,13 @@ async function runStep(
     };
   }
 
-  const role = resolveCredential(step, opts.credentials, opts.defaultCredential);
+  const role = resolveCredential(
+    step,
+    opts.flow,
+    ctx,
+    opts.credentials,
+    opts.defaultCredential
+  );
 
   let url = buildRequestUrl(
     opts.baseUrl,

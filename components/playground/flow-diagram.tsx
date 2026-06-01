@@ -34,6 +34,7 @@ import {
   ChevronRight,
   Copy,
   Grid2x2,
+  KeyRound,
   Map as MapIcon,
   Maximize,
   Play,
@@ -49,12 +50,25 @@ import { toast } from "sonner";
 import { MethodBadge } from "@/components/method-badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import {
   Tooltip,
   TooltipContent,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
-import { FlowStepCard } from "@/components/playground/flow-step-card";
+import { FlowStepInspector } from "@/components/playground/flow-step-inspector";
 import { LiveJsonTree } from "@/components/playground/live-json-tree";
 import { isJsonTreeValue } from "@/lib/playground/json-format";
 import type { Credential } from "@/lib/playground/credentials";
@@ -75,6 +89,12 @@ import {
   createFlowStepFromEndpoint,
   type FlowApiData,
 } from "@/lib/flows/step-defaults";
+import {
+  applyRunAsToAll,
+  setFlowLoginStep,
+  stepRoleLabel,
+  type RunAsBulkValue,
+} from "@/lib/flows/auth-helpers";
 import { layoutWithElk } from "@/lib/flows/layout";
 import {
   defaultDiagramPosition,
@@ -112,6 +132,7 @@ type StepNodeData = {
   label: string;
   method: string;
   role?: string;
+  isLogin?: boolean;
   statusClass: string;
   selected: boolean;
   outcome?: StepRunResult["outcome"];
@@ -164,7 +185,14 @@ function StepNode({ data }: { data: StepNodeData }) {
       <div className="flex items-center gap-2 mb-1">
         <MethodBadge method={data.method} />
         {data.role && (
-          <span className="text-[10px] px-1.5 py-0.5 rounded bg-secondary text-secondary-foreground truncate max-w-[100px]">
+          <span
+            className={cn(
+              "text-[10px] px-1.5 py-0.5 rounded truncate max-w-[100px]",
+              data.isLogin
+                ? "bg-primary/15 text-primary border border-primary/30"
+                : "bg-secondary text-secondary-foreground"
+            )}
+          >
             {data.role}
           </span>
         )}
@@ -278,10 +306,7 @@ function buildNodesAndEdges(
     const ep = endpoints.find((e) => flowEndpointKey(e) === step.endpointKey);
     const result = resultByStepId.get(step.id);
     const running = runningIndex === index;
-    const role =
-      step.credentialName === "No auth"
-        ? "No auth"
-        : step.credentialName ?? "Default";
+    const { label: role, isLogin } = stepRoleLabel(step, flow.auth);
     const position = positions[step.id] ?? defaultDiagramPosition(index);
 
     return {
@@ -293,6 +318,7 @@ function buildNodesAndEdges(
         label: ep?.path ?? step.endpointKey,
         method: ep?.method ?? "GET",
         role,
+        isLogin,
         statusClass: statusColor(result?.outcome, running),
         selected: selectedStepId === step.id,
         outcome: result?.outcome,
@@ -874,6 +900,14 @@ function FlowCanvas({
             ]
           : []),
         {
+          label: "Use as login for flow",
+          icon: <KeyRound className="h-3.5 w-3.5" />,
+          onClick: () => {
+            onChange(setFlowLoginStep(flow, targetId));
+            toast.success("This step is now the flow login");
+          },
+        },
+        {
           label: "Duplicate",
           icon: <Copy className="h-3.5 w-3.5" />,
           onClick: () => duplicateStep(targetId),
@@ -926,6 +960,8 @@ function FlowCanvas({
     deleteSeqEdges,
     autoArrange,
     fitView,
+    flow,
+    onChange,
   ]);
 
   return (
@@ -980,6 +1016,12 @@ function FlowCanvas({
               >
                 <Plus className="h-4 w-4" />
               </ToolbarButton>
+              <FlowAuthPopover
+                flow={flow}
+                endpoints={endpoints}
+                credentials={credentials}
+                onChange={onChange}
+              />
               <ToolbarButton label="Auto-arrange" onClick={() => void autoArrange()}>
                 <Wand2 className="h-4 w-4" />
               </ToolbarButton>
@@ -1038,7 +1080,7 @@ function FlowCanvas({
         </div>
       )}
 
-      <DiagramInspector
+      <FlowStepInspector
         flow={flow}
         endpoints={endpoints}
         apiData={apiData}
@@ -1058,6 +1100,122 @@ function FlowCanvas({
         onClose={() => setMenu(null)}
       />
     </div>
+  );
+}
+
+function FlowAuthPopover({
+  flow,
+  endpoints,
+  credentials,
+  onChange,
+}: {
+  flow: Flow;
+  endpoints: PlaygroundEndpoint[];
+  credentials: Credential[];
+  onChange: (flow: Flow) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const [bulkRunAs, setBulkRunAs] = useState<RunAsBulkValue>("__default__");
+  const ordered = useMemo(() => orderSteps(flow), [flow]);
+
+  const applyBulk = () => {
+    onChange(applyRunAsToAll(flow, bulkRunAs));
+    toast.success("Run-as applied to all steps");
+    setOpen(false);
+  };
+
+  return (
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger asChild>
+        <Button
+          type="button"
+          variant={flow.auth ? "secondary" : "ghost"}
+          size="icon"
+          className="h-8 w-8"
+          title="Flow auth"
+        >
+          <KeyRound className="h-4 w-4" />
+          <span className="sr-only">Flow auth</span>
+        </Button>
+      </PopoverTrigger>
+      <PopoverContent className="w-80 p-3" align="center">
+        <p className="text-xs font-semibold mb-1">Flow auth</p>
+        <p className="text-[10px] text-muted-foreground mb-3 leading-relaxed">
+          Mark a login step and capture its token. Other steps on Flow default
+          automatically send Bearer token—no pause or per-step header edits.
+        </p>
+
+        <div className="space-y-1.5 mb-3">
+          <Label className="text-[10px]">Login step</Label>
+          <Select
+            value={flow.auth?.loginStepId ?? "__none__"}
+            onValueChange={(v) => {
+              if (v === "__none__") {
+                onChange({ ...flow, auth: undefined });
+                toast.success("Login step cleared");
+                return;
+              }
+              onChange(setFlowLoginStep(flow, v));
+              toast.success("Login step set");
+            }}
+          >
+            <SelectTrigger className="h-8 text-xs">
+              <SelectValue placeholder="Choose login step" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="__none__">None</SelectItem>
+              {ordered.map((s, i) => {
+                const ep = endpoints.find(
+                  (e) => flowEndpointKey(e) === s.endpointKey
+                );
+                return (
+                  <SelectItem key={s.id} value={s.id}>
+                    Step {i + 1}: {ep?.method ?? ""} {ep?.path ?? s.endpointKey}
+                  </SelectItem>
+                );
+              })}
+            </SelectContent>
+          </Select>
+          {flow.auth?.tokenVar && (
+            <p className="text-[10px] text-muted-foreground">
+              Token variable:{" "}
+              <code className="font-mono">{flow.auth.tokenVar}</code>
+            </p>
+          )}
+        </div>
+
+        <div className="space-y-1.5 border-t border-border pt-3">
+          <Label className="text-[10px]">Apply Run as to all steps</Label>
+          <Select
+            value={bulkRunAs}
+            onValueChange={(v) => setBulkRunAs(v as RunAsBulkValue)}
+          >
+            <SelectTrigger className="h-8 text-xs">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="__default__">
+                Flow default (inherit login token)
+              </SelectItem>
+              <SelectItem value="__none__">No auth</SelectItem>
+              {credentials.map((c) => (
+                <SelectItem key={c.id} value={c.name}>
+                  {c.name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <Button
+            type="button"
+            size="sm"
+            className="h-8 w-full text-xs"
+            onClick={applyBulk}
+          >
+            Apply to all steps
+          </Button>
+        </div>
+      </PopoverContent>
+    </Popover>
   );
 }
 
@@ -1092,114 +1250,6 @@ function ToolbarButton({
       </TooltipTrigger>
       <TooltipContent side="bottom">{label}</TooltipContent>
     </Tooltip>
-  );
-}
-
-function DiagramInspector({
-  flow,
-  endpoints,
-  apiData,
-  baseUrl,
-  credentials,
-  selectedStepId,
-  resultByStepId,
-  runningIndex,
-  onChange,
-  onClose,
-  onRunFromStep,
-}: {
-  flow: Flow;
-  endpoints: PlaygroundEndpoint[];
-  apiData: FlowApiData;
-  baseUrl: string;
-  credentials: Credential[];
-  selectedStepId: string | null;
-  resultByStepId: Map<string, StepRunResult>;
-  runningIndex?: number | null;
-  onChange: (flow: Flow) => void;
-  onClose: () => void;
-  onRunFromStep?: (stepId: string) => void;
-}) {
-  const ordered = useMemo(() => orderSteps(flow), [flow]);
-  const orderedIndex = ordered.findIndex((s) => s.id === selectedStepId);
-  if (!selectedStepId || orderedIndex < 0) return null;
-  const step = ordered[orderedIndex];
-  const realIndex = flow.steps.findIndex((s) => s.id === selectedStepId);
-  const selectedResult = resultByStepId.get(step.id);
-  const selectedFailed =
-    selectedResult?.outcome === "fail" || selectedResult?.outcome === "error";
-
-  const updateStep = (next: FlowStep) => {
-    const steps = [...flow.steps];
-    steps[realIndex] = next;
-    onChange({ ...flow, steps });
-  };
-
-  const removeStep = () => {
-    const steps = flow.steps.filter((s) => s.id !== selectedStepId);
-    const base = flow.connections ?? linearConnections(flow.steps);
-    const connections = pruneConnections(base, new Set(steps.map((s) => s.id)));
-    const positions = { ...(flow.diagramPositions ?? {}) };
-    delete positions[selectedStepId];
-    onChange({ ...flow, steps, connections, diagramPositions: positions });
-    onClose();
-  };
-
-  return (
-    <div className="absolute right-3 top-3 bottom-3 z-10 flex w-[440px] max-w-[90vw] flex-col rounded-lg border border-border bg-card shadow-lg">
-      <div className="flex items-center justify-between gap-2 border-b border-border px-3 py-2">
-        <span className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-          Step {orderedIndex + 1}
-        </span>
-        <div className="flex items-center gap-1">
-          {selectedFailed && onRunFromStep && (
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              className="h-7 gap-1 text-[11px]"
-              aria-label={`Run flow from step ${orderedIndex + 1}`}
-              onClick={() => onRunFromStep(step.id)}
-            >
-              <Play className="h-3 w-3" />
-              Run from here
-            </Button>
-          )}
-          <Button
-            type="button"
-            variant="ghost"
-            size="icon"
-            className="h-6 w-6"
-            onClick={onClose}
-          >
-            <X className="h-3.5 w-3.5" />
-          </Button>
-        </div>
-      </div>
-      <div className="min-h-0 flex-1 overflow-y-auto p-3">
-        <FlowStepCard
-          step={step}
-          index={orderedIndex}
-          endpoints={endpoints}
-          apiData={apiData}
-          baseUrl={baseUrl}
-          priorSteps={ordered.slice(0, orderedIndex)}
-          credentials={credentials}
-          open
-          onOpenChange={() => {}}
-          selected
-          canMoveUp={false}
-          canMoveDown={false}
-          runResult={resultByStepId.get(step.id)}
-          resultsByStepId={resultByStepId}
-          isRunning={runningIndex === orderedIndex}
-          onChange={updateStep}
-          onRemove={removeStep}
-          onMoveUp={() => {}}
-          onMoveDown={() => {}}
-        />
-      </div>
-    </div>
   );
 }
 

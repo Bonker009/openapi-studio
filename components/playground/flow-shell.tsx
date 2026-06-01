@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import {
   ArrowLeft,
+  BookOpen,
   Copy,
   FolderOpen,
   Loader2,
@@ -34,6 +35,15 @@ import { TokenPanel } from "@/components/playground/token-panel";
 import { FlowBuilder } from "@/components/playground/flow-builder";
 import { FlowDiagram } from "@/components/playground/flow-diagram";
 import { FlowResultsPanel } from "@/components/playground/flow-results-panel";
+import {
+  FlowTutorialDialog,
+  hasSeenFlowTutorial,
+  markFlowTutorialSeen,
+} from "@/components/playground/flow-tutorial-dialog";
+import {
+  buildSampleFlow,
+  canBuildSampleFlow,
+} from "@/lib/flows/sample-flow";
 import { PayloadTreeView } from "@/components/playground/payload-picker";
 import { extractPlaygroundEndpoints } from "@/lib/playground/endpoints";
 import {
@@ -117,6 +127,7 @@ export function FlowShell({
   const [focusStepId, setFocusStepId] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState("builder");
   const [flowsDialogOpen, setFlowsDialogOpen] = useState(false);
+  const [tutorialOpen, setTutorialOpen] = useState(false);
   const [pauseState, setPauseState] = useState<PauseState | null>(null);
   const [pauseCaptures, setPauseCaptures] = useState<PauseCapture[]>([]);
   const abortRef = useRef<AbortController | null>(null);
@@ -169,6 +180,40 @@ export function FlowShell({
     refreshCredentials();
     loadFlows();
   }, [refreshCredentials, loadFlows]);
+
+  const sampleFlowAvailable = useMemo(
+    () => canBuildSampleFlow(endpoints),
+    [endpoints]
+  );
+
+  useEffect(() => {
+    if (!hasSeenFlowTutorial(specId)) {
+      setTutorialOpen(true);
+    }
+  }, [specId]);
+
+  const handleTutorialOpenChange = (open: boolean) => {
+    setTutorialOpen(open);
+    if (!open) markFlowTutorialSeen(specId);
+  };
+
+  const loadSampleFlow = () => {
+    const built = buildSampleFlow(specId, endpoints, apiData, baseUrl);
+    if (!built.ok) {
+      toast.error(built.reason);
+      return;
+    }
+    if (dirty && !confirm("Replace the current draft with the example flow?")) {
+      return;
+    }
+    setDraft(built.flow);
+    setSavedSnapshot("");
+    setRunResults([]);
+    setRunOutcome(null);
+    setSelectedStepId(null);
+    setActiveTab("builder");
+    toast.success("Example flow loaded");
+  };
 
   const selectFlow = (flow: Flow) => {
     if (dirty && !confirm("Discard unsaved changes to this flow?")) return;
@@ -490,6 +535,15 @@ export function FlowShell({
               variant="outline"
               size="sm"
               className="h-8 gap-1.5 text-xs"
+              onClick={() => setTutorialOpen(true)}
+            >
+              <BookOpen className="h-3.5 w-3.5" />
+              How it works
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              className="h-8 gap-1.5 text-xs"
               onClick={() => setFlowsDialogOpen(true)}
             >
               <FolderOpen className="h-3.5 w-3.5" />
@@ -637,7 +691,7 @@ export function FlowShell({
             </TabsContent>
             <TabsContent
               value="results"
-              className="flex-1 min-h-0 overflow-hidden m-0 data-[state=inactive]:hidden"
+              className="flex flex-col flex-1 min-h-0 overflow-hidden m-0 data-[state=inactive]:hidden"
             >
               <FlowResultsPanel
                 results={runResults}
@@ -651,6 +705,13 @@ export function FlowShell({
           </Tabs>
         </div>
       </main>
+
+      <FlowTutorialDialog
+        open={tutorialOpen}
+        onOpenChange={handleTutorialOpenChange}
+        canLoadSample={sampleFlowAvailable}
+        onLoadSample={loadSampleFlow}
+      />
 
       <Dialog open={flowsDialogOpen} onOpenChange={setFlowsDialogOpen}>
         <DialogContent className="sm:max-w-md">

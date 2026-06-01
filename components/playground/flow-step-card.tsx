@@ -7,6 +7,7 @@ import {
   ChevronRight,
   ChevronUp,
   Copy,
+  KeyRound,
   Loader2,
   Plus,
   Trash2,
@@ -40,7 +41,13 @@ import type { Credential } from "@/lib/playground/credentials";
 import type { OpenApiParameter, PlaygroundEndpoint } from "@/lib/playground/endpoints";
 import { getRequestBodyInfo } from "@/lib/playground/request-body";
 import { flowEndpointKey } from "@/lib/flows/types";
-import type { Extraction, FlowStep, StepRunResult } from "@/lib/flows/types";
+import { stepRoleLabel } from "@/lib/flows/auth-helpers";
+import type {
+  Extraction,
+  FlowAuth,
+  FlowStep,
+  StepRunResult,
+} from "@/lib/flows/types";
 import {
   defaultFlowStepBody,
   getEndpointMethodData,
@@ -73,6 +80,7 @@ type FlowStepCardProps = {
   baseUrl: string;
   priorSteps: FlowStep[];
   credentials: Credential[];
+  flowAuth?: FlowAuth;
   open: boolean;
   onOpenChange: (open: boolean) => void;
   selected?: boolean;
@@ -87,6 +95,9 @@ type FlowStepCardProps = {
   onMoveUp: () => void;
   onMoveDown: () => void;
   onFocus?: () => void;
+  onSetAsLogin?: () => void;
+  /** Chromeless body for diagram inspector sheet (no card header/actions). */
+  embedded?: boolean;
 };
 
 function referenceOptions(priorSteps: FlowStep[]): { label: string; token: string }[] {
@@ -389,6 +400,7 @@ export function FlowStepCard({
   baseUrl,
   priorSteps,
   credentials,
+  flowAuth,
   open,
   onOpenChange,
   selected,
@@ -403,6 +415,8 @@ export function FlowStepCard({
   onMoveUp,
   onMoveDown,
   onFocus,
+  onSetAsLogin,
+  embedded = false,
 }: FlowStepCardProps) {
   const endpoint = endpoints.find((e) => flowEndpointKey(e) === step.endpointKey);
   const refs = useMemo(() => referenceOptions(priorSteps), [priorSteps]);
@@ -461,10 +475,14 @@ export function FlowStepCard({
   );
 
   const captureCount = step.extractions.filter((e) => e.name.trim()).length;
-  const roleLabel =
-    step.credentialName === "No auth"
-      ? "No auth"
-      : step.credentialName ?? "Default";
+  const {
+    label: roleLabel,
+    isLogin: isLoginStep,
+    usesLoginToken,
+  } = useMemo(
+    () => stepRoleLabel(step, flowAuth),
+    [step, flowAuth]
+  );
 
   const updateParam = (name: string, value: string) => {
     onChange({
@@ -517,125 +535,30 @@ export function FlowStepCard({
     ...headerParams,
   ];
 
-  return (
-    <Collapsible
-      open={open}
-      onOpenChange={onOpenChange}
-      id={`flow-step-${step.id}`}
+  const fieldBody = (
+    <div
       className={cn(
-        "scroll-mt-4 rounded-lg border border-border bg-card shadow-sm",
-        selected && "ring-2 ring-primary/50"
+        "grid grid-cols-1 sm:grid-cols-2 gap-3",
+        embedded ? "pt-0" : "pt-3"
       )}
     >
-      <div className="flex items-center gap-1 px-2 py-2 min-h-[44px]">
-        <CollapsibleTrigger
-          className="flex flex-1 items-center gap-2 min-w-0 text-left hover:bg-muted/40 rounded-md px-1 py-0.5 -mx-1"
-          onClick={onFocus}
-        >
-          {open ? (
-            <ChevronDown className="h-4 w-4 shrink-0 text-muted-foreground" />
-          ) : (
-            <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground" />
-          )}
-          <span className="text-xs text-muted-foreground tabular-nums shrink-0">
-            {index + 1}
-          </span>
-          {endpoint ? (
-            <>
-              <MethodBadge method={endpoint.method} />
-              <span className="text-xs font-mono truncate min-w-0">
-                {endpoint.path}
-              </span>
-            </>
-          ) : (
-            <span className="text-xs text-destructive truncate">
-              {step.endpointKey}
-            </span>
-          )}
-          <StatusDot runResult={runResult} isRunning={isRunning} />
-          {!open && (
-            <div className="hidden sm:flex items-center gap-1 min-w-0 flex-wrap">
-              <Badge variant="secondary" className="text-[9px] h-5 px-1.5 shrink-0">
-                {roleLabel}
-              </Badge>
-              {captureCount > 0 && (
-                <Badge variant="outline" className="text-[9px] h-5 px-1.5 shrink-0">
-                  {captureCount} cap
-                </Badge>
-              )}
-              {previewParams.map((c) => (
-                <Badge
-                  key={c.key}
-                  variant="outline"
-                  className="text-[9px] h-5 px-1.5 font-mono shrink-0 max-w-[100px] truncate"
-                >
-                  {c.key}={c.value}
-                </Badge>
-              ))}
-            </div>
-          )}
-        </CollapsibleTrigger>
-        <div className="flex items-center gap-0.5 shrink-0">
-          <Button
-            type="button"
-            variant="ghost"
-            size="icon"
-            className="h-7 w-7"
-            disabled={!canMoveUp}
-            onClick={(e) => {
-              e.stopPropagation();
-              onMoveUp();
-            }}
-          >
-            <ChevronUp className="h-3.5 w-3.5" />
-          </Button>
-          <Button
-            type="button"
-            variant="ghost"
-            size="icon"
-            className="h-7 w-7"
-            disabled={!canMoveDown}
-            onClick={(e) => {
-              e.stopPropagation();
-              onMoveDown();
-            }}
-          >
-            <ChevronDown className="h-3.5 w-3.5" />
-          </Button>
-          {onDuplicate && (
-            <Button
-              type="button"
-              variant="ghost"
-              size="icon"
-              className="h-7 w-7"
-              title="Duplicate step"
-              onClick={(e) => {
-                e.stopPropagation();
-                onDuplicate();
-              }}
-            >
-              <Copy className="h-3.5 w-3.5" />
-            </Button>
-          )}
-          <Button
-            type="button"
-            variant="ghost"
-            size="icon"
-            className="h-7 w-7 text-destructive"
-            onClick={(e) => {
-              e.stopPropagation();
-              onRemove();
-            }}
-          >
-            <Trash2 className="h-3.5 w-3.5" />
-          </Button>
-        </div>
-      </div>
-
-      <CollapsibleContent className="px-3 pb-3 pt-0 border-t border-border/60">
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-3">
           <div className="space-y-1">
-            <Label className="text-[10px]">Run as</Label>
+            <div className="flex items-center justify-between gap-1">
+              <Label className="text-[10px]">Run as</Label>
+              {!embedded && onSetAsLogin && (
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  className="h-6 gap-1 px-1.5 text-[9px] text-primary"
+                  onClick={onSetAsLogin}
+                  title="Use this step's captured token for downstream Flow-default auth"
+                >
+                  <KeyRound className="h-3 w-3" />
+                  Use as login
+                </Button>
+              )}
+            </div>
             <Select
               value={
                 step.credentialName === "No auth"
@@ -968,6 +891,140 @@ export function FlowStepCard({
             </div>
           </fieldset>
         </div>
+  );
+
+  if (embedded) {
+    return (
+      <div id={`flow-step-${step.id}`} className="min-w-0">
+        {fieldBody}
+      </div>
+    );
+  }
+
+  return (
+    <Collapsible
+      open={open}
+      onOpenChange={onOpenChange}
+      id={`flow-step-${step.id}`}
+      className={cn(
+        "scroll-mt-4 rounded-lg border border-border bg-card shadow-sm",
+        selected && "ring-2 ring-primary/50"
+      )}
+    >
+      <div className="flex items-center gap-1 px-2 py-2 min-h-[44px]">
+        <CollapsibleTrigger
+          className="flex flex-1 items-center gap-2 min-w-0 text-left hover:bg-muted/40 rounded-md px-1 py-0.5 -mx-1"
+          onClick={onFocus}
+        >
+          {open ? (
+            <ChevronDown className="h-4 w-4 shrink-0 text-muted-foreground" />
+          ) : (
+            <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground" />
+          )}
+          <span className="text-xs text-muted-foreground tabular-nums shrink-0">
+            {index + 1}
+          </span>
+          {endpoint ? (
+            <>
+              <MethodBadge method={endpoint.method} />
+              <span className="text-xs font-mono truncate min-w-0">
+                {endpoint.path}
+              </span>
+            </>
+          ) : (
+            <span className="text-xs text-destructive truncate">
+              {step.endpointKey}
+            </span>
+          )}
+          <StatusDot runResult={runResult} isRunning={isRunning} />
+          {!open && (
+            <div className="hidden sm:flex items-center gap-1 min-w-0 flex-wrap">
+              <Badge
+                variant="secondary"
+                className={cn(
+                  "text-[9px] h-5 px-1.5 shrink-0",
+                  isLoginStep && "border-primary/40 bg-primary/10",
+                  usesLoginToken && "border-success/40 bg-success/10"
+                )}
+              >
+                {roleLabel}
+              </Badge>
+              {captureCount > 0 && (
+                <Badge variant="outline" className="text-[9px] h-5 px-1.5 shrink-0">
+                  {captureCount} cap
+                </Badge>
+              )}
+              {previewParams.map((c) => (
+                <Badge
+                  key={c.key}
+                  variant="outline"
+                  className="text-[9px] h-5 px-1.5 font-mono shrink-0 max-w-[100px] truncate"
+                >
+                  {c.key}={c.value}
+                </Badge>
+              ))}
+            </div>
+          )}
+        </CollapsibleTrigger>
+        <div className="flex items-center gap-0.5 shrink-0">
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            className="h-7 w-7"
+            disabled={!canMoveUp}
+            onClick={(e) => {
+              e.stopPropagation();
+              onMoveUp();
+            }}
+          >
+            <ChevronUp className="h-3.5 w-3.5" />
+          </Button>
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            className="h-7 w-7"
+            disabled={!canMoveDown}
+            onClick={(e) => {
+              e.stopPropagation();
+              onMoveDown();
+            }}
+          >
+            <ChevronDown className="h-3.5 w-3.5" />
+          </Button>
+          {onDuplicate && (
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              className="h-7 w-7"
+              title="Duplicate step"
+              onClick={(e) => {
+                e.stopPropagation();
+                onDuplicate();
+              }}
+            >
+              <Copy className="h-3.5 w-3.5" />
+            </Button>
+          )}
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            className="h-7 w-7 text-destructive"
+            onClick={(e) => {
+              e.stopPropagation();
+              onRemove();
+            }}
+          >
+            <Trash2 className="h-3.5 w-3.5" />
+          </Button>
+        </div>
+      </div>
+
+      <CollapsibleContent className="px-3 pb-3 pt-0 border-t border-border/60">
+        {fieldBody}
       </CollapsibleContent>
     </Collapsible>
   );

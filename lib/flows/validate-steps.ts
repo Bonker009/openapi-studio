@@ -1,6 +1,7 @@
 import { extractTokenRefs } from "@/lib/flows/resolve-refs";
+import { orderSteps } from "@/lib/flows/order";
 import { flowEndpointKey } from "@/lib/flows/types";
-import type { FlowStep } from "@/lib/flows/types";
+import type { Flow, FlowStep } from "@/lib/flows/types";
 import type { PlaygroundEndpoint } from "@/lib/playground/endpoints";
 import { mergeStepFields } from "@/lib/flows/step-defaults";
 
@@ -19,12 +20,58 @@ function collectStrings(step: FlowStep): string[] {
   ];
 }
 
+function validateFlowAuth(flow: Pick<Flow, "steps" | "auth">): FlowStepIssue[] {
+  const issues: FlowStepIssue[] = [];
+  const auth = flow.auth;
+  if (!auth?.loginStepId || !auth.tokenVar?.trim()) return issues;
+
+  const loginStep = flow.steps.find((s) => s.id === auth.loginStepId);
+  if (!loginStep) {
+    issues.push({
+      stepIndex: 0,
+      message: "Flow auth: login step no longer exists in this flow",
+    });
+    return issues;
+  }
+
+  const loginIndex = orderSteps(flow as Flow).findIndex(
+    (s) => s.id === auth.loginStepId
+  );
+  const hasCapture = loginStep.extractions.some(
+    (ex) => ex.name.trim() === auth.tokenVar.trim()
+  );
+  if (!hasCapture) {
+    issues.push({
+      stepIndex: Math.max(0, loginIndex),
+      message: `Flow auth: login step has no capture named "${auth.tokenVar}"`,
+    });
+  }
+
+  if (loginIndex > 0) {
+    const ordered = orderSteps(flow as Flow);
+    for (let i = 0; i < loginIndex; i++) {
+      const step = ordered[i];
+      if (step.credentialName === "No auth") continue;
+      const usesFlowDefault = !step.credentialName?.trim();
+      if (usesFlowDefault) {
+        issues.push({
+          stepIndex: i,
+          message: `Step ${i + 1} runs before the login step but uses Flow default auth (expects a token not yet captured)`,
+        });
+      }
+    }
+  }
+
+  return issues;
+}
+
 /** Soft warnings before running a flow (does not block execution). */
 export function validateFlowSteps(
-  steps: FlowStep[],
+  flow: Pick<Flow, "steps" | "auth" | "connections">,
   endpoints: PlaygroundEndpoint[]
 ): FlowStepIssue[] {
-  const issues: FlowStepIssue[] = [];
+  const issues: FlowStepIssue[] = [...validateFlowAuth(flow)];
+  const steps = flow.steps;
 
   steps.forEach((step, stepIndex) => {
     const endpoint = endpoints.find((e) => flowEndpointKey(e) === step.endpointKey);

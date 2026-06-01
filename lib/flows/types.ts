@@ -41,6 +41,16 @@ export type FlowConnection = { source: string; target: string };
 /** Diagram node position (visual layout only; does not change step order). */
 export type DiagramPosition = { x: number; y: number };
 
+/** Flow-scoped auth: downstream steps use a token captured from a login step. */
+export type FlowAuth = {
+  /** Step id whose response yields the token. */
+  loginStepId: string;
+  /** Capture variable name on that step holding the token. */
+  tokenVar: string;
+  /** Auth scheme applied downstream (bearer for now). */
+  scheme?: "bearer";
+};
+
 /** A saved, ordered chain of endpoint calls. */
 export type Flow = {
   id: string;
@@ -48,6 +58,8 @@ export type Flow = {
   name: string;
   description?: string;
   steps: FlowStep[];
+  /** Optional login-step token auth for Flow-default steps. */
+  auth?: FlowAuth;
   /** Behaviour when a step fails/errors. Default "stop". */
   onStepFailure: FlowFailurePolicy;
   /** Optional explicit canvas wiring; defines run order when present. */

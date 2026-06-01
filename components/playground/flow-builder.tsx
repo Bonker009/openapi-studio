@@ -42,14 +42,20 @@ import {
   type PlaygroundEndpoint,
 } from "@/lib/playground/endpoints";
 import {
+  pickTokenVarFromStep,
+  setFlowLoginStep,
+} from "@/lib/flows/auth-helpers";
+import {
   flowEndpointKey,
   MAX_FLOW_STEPS,
   newStepId,
   type Flow,
+  type FlowAuth,
   type FlowStep,
   type StepRunResult,
 } from "@/lib/flows/types";
 import { MethodBadge } from "@/components/method-badge";
+import { toast } from "sonner";
 import {
   createFlowStepFromEndpoint,
   type FlowApiData,
@@ -111,8 +117,8 @@ export function FlowBuilder({
   };
 
   const validationIssues = useMemo(
-    () => validateFlowSteps(flow.steps, endpoints),
-    [flow.steps, endpoints]
+    () => validateFlowSteps(flow, endpoints),
+    [flow, endpoints]
   );
 
   const showValidation =
@@ -205,6 +211,45 @@ export function FlowBuilder({
   // Display in execution order so the builder matches the wired run order.
   const orderedSteps = useMemo(() => orderSteps(flow), [flow]);
 
+  const loginStep = flow.auth
+    ? flow.steps.find((s) => s.id === flow.auth!.loginStepId)
+    : undefined;
+
+  const loginCaptureNames = useMemo(() => {
+    if (!loginStep) return [];
+    return loginStep.extractions
+      .map((ex) => ex.name.trim())
+      .filter(Boolean);
+  }, [loginStep]);
+
+  const setFlowAuthMode = (mode: "credential" | "login_token") => {
+    if (mode === "credential") {
+      onChange({ ...flow, auth: undefined });
+      return;
+    }
+    const first = orderedSteps[0];
+    if (!first) return;
+    const { extractions, tokenVar } = pickTokenVarFromStep(first);
+    const steps = flow.steps.map((s) =>
+      s.id === first.id ? { ...s, extractions } : s
+    );
+    onChange({
+      ...flow,
+      steps,
+      auth: { loginStepId: first.id, tokenVar, scheme: "bearer" },
+    });
+  };
+
+  const updateFlowAuth = (patch: Partial<FlowAuth>) => {
+    if (!flow.auth) return;
+    onChange({ ...flow, auth: { ...flow.auth, ...patch } });
+  };
+
+  const setStepAsLogin = (stepId: string) => {
+    onChange(setFlowLoginStep(flow, stepId));
+    toast.success("This step is now the flow login");
+  };
+
   useEffect(() => {
     if (!focusStepId) return;
     setStepOpen(focusStepId, true);
@@ -251,6 +296,82 @@ export function FlowBuilder({
               <SelectItem value="continue">Continue — run all steps</SelectItem>
             </SelectContent>
           </Select>
+        </div>
+
+        <div className="rounded-lg border border-border/60 bg-muted/15 p-3 space-y-2">
+          <Label className="text-xs font-semibold">Flow auth</Label>
+          <p className="text-[10px] text-muted-foreground">
+            Steps using Flow default can authenticate with a token captured from
+            a login step—no global credential required.
+          </p>
+          <Select
+            value={flow.auth ? "login_token" : "credential"}
+            onValueChange={(v) =>
+              setFlowAuthMode(v as "credential" | "login_token")
+            }
+          >
+            <SelectTrigger className="h-8 text-xs">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="credential">
+                Saved credential (navbar default)
+              </SelectItem>
+              <SelectItem value="login_token">Token from a step</SelectItem>
+            </SelectContent>
+          </Select>
+          {flow.auth && (
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-1">
+              <div className="space-y-1">
+                <Label className="text-[10px]">Login step</Label>
+                <Select
+                  value={flow.auth.loginStepId}
+                  onValueChange={(id) => updateFlowAuth({ loginStepId: id })}
+                >
+                  <SelectTrigger className="h-8 text-xs">
+                    <SelectValue placeholder="Pick step" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {orderedSteps.map((s, i) => {
+                      const ep = endpoints.find(
+                        (e) => flowEndpointKey(e) === s.endpointKey
+                      );
+                      return (
+                        <SelectItem key={s.id} value={s.id}>
+                          Step {i + 1}: {ep?.method ?? ""} {ep?.path ?? s.endpointKey}
+                        </SelectItem>
+                      );
+                    })}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-1">
+                <Label className="text-[10px]">Token variable</Label>
+                <Select
+                  value={flow.auth.tokenVar}
+                  onValueChange={(v) => updateFlowAuth({ tokenVar: v })}
+                  disabled={loginCaptureNames.length === 0}
+                >
+                  <SelectTrigger className="h-8 text-xs">
+                    <SelectValue
+                      placeholder={
+                        loginCaptureNames.length === 0
+                          ? "Add a capture on login step"
+                          : undefined
+                      }
+                    />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {loginCaptureNames.map((name) => (
+                      <SelectItem key={name} value={name}>
+                        {name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+          )}
         </div>
       </div>
 
@@ -403,6 +524,7 @@ export function FlowBuilder({
               baseUrl={baseUrl}
               priorSteps={orderedSteps.slice(0, index)}
               credentials={credentials}
+              flowAuth={flow.auth}
               open={isStepOpen(step.id)}
               onOpenChange={(o) => setStepOpen(step.id, o)}
               selected={selectedStepId === step.id}
@@ -417,6 +539,7 @@ export function FlowBuilder({
               onMoveUp={() => moveStep(realIndex, -1)}
               onMoveDown={() => moveStep(realIndex, 1)}
               onFocus={() => onSelectStep(step.id)}
+              onSetAsLogin={() => setStepAsLogin(step.id)}
             />
           );
         })}

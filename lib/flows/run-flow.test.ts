@@ -7,7 +7,7 @@ import {
   type RunContext,
 } from "@/lib/flows/resolve-refs";
 import { computeDependencyEdges } from "@/lib/flows/graph";
-import { runFlow, type FlowExecutor } from "@/lib/flows/run-flow";
+import { flowLoginCredential, runFlow, type FlowExecutor } from "@/lib/flows/run-flow";
 import { keyPathToAccessor } from "@/lib/flows/payload-tree";
 import {
   flowEndpointKey,
@@ -425,6 +425,83 @@ describe("runFlow", () => {
     assert.equal(result.steps[0], priorStep0);
     assert.equal(result.steps[1].outcome, "pass");
     assert.equal(result.outcome, "pass");
+  });
+
+  it("uses a captured login token for downstream Flow-default steps", async () => {
+    const endpoints = [
+      { ...ep("POST", "/auth/login"), hasRequestBody: true },
+      { ...ep("GET", "/me"), requiresAuth: true },
+    ];
+    const authHeaders: string[] = [];
+    const execute: FlowExecutor = async (url, init): Promise<HttpRequestResult> => {
+      const h = new Headers(init.headers);
+      const auth = h.get("Authorization");
+      if (auth) authHeaders.push(auth);
+      if (url.endsWith("/auth/login")) {
+        return {
+          data: { accessToken: "tok-xyz" },
+          status: 200,
+          statusText: "OK",
+          headers: {},
+          responseTime: 1,
+        };
+      }
+      return {
+        data: { user: "alice" },
+        status: 200,
+        statusText: "OK",
+        headers: {},
+        responseTime: 1,
+      };
+    };
+
+    const flow: Flow = {
+      ...makeFlow(
+        [
+          {
+            id: "login",
+            endpointKey: flowEndpointKey(endpoints[0]),
+            paramValues: {},
+            headerValues: {},
+            extractions: [
+              { name: "token", source: "body", path: "accessToken" },
+            ],
+          },
+          {
+            id: "me",
+            endpointKey: flowEndpointKey(endpoints[1]),
+            paramValues: {},
+            headerValues: {},
+            extractions: [],
+          },
+        ],
+        "stop"
+      ),
+      auth: { loginStepId: "login", tokenVar: "token", scheme: "bearer" },
+    };
+
+    const result = await runFlow({
+      flow,
+      endpoints,
+      baseUrl: "http://api.test",
+      credentials: [],
+      defaultCredential: null,
+      execute,
+    });
+
+    assert.equal(result.outcome, "pass");
+    assert.equal(result.steps[1].roleUsed, "Login token");
+    assert.equal(authHeaders[0], "Bearer tok-xyz");
+  });
+
+  it("flowLoginCredential returns null when token var is missing", () => {
+    const flow: Flow = {
+      ...makeFlow([], "stop"),
+      auth: { loginStepId: "s1", tokenVar: "token" },
+    };
+    assert.equal(flowLoginCredential(flow, { vars: {}, steps: [] }), null);
+    const cred = flowLoginCredential(flow, { vars: { token: "abc" }, steps: [] });
+    assert.equal(cred?.type === "bearer" ? cred.token : null, "abc");
   });
 
   it("returns the run context for later resumes", async () => {
