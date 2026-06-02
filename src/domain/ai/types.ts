@@ -77,6 +77,9 @@ export type QAInput = {
   specId: string;
   question: string;
   conversationId?: string;
+  /** Chat provider override (Ask Docs). */
+  chatProvider?: "openai" | "groq";
+  chatModel?: string;
 };
 
 export type QAOutput = {

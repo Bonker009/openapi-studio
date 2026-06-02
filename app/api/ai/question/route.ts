@@ -4,6 +4,7 @@ import {
   isAiModuleEnabled,
 } from "@/features/ai/ai-flow-service";
 import { streamOpenApiQuestion } from "@/domain/ai/pipeline/answer-question-stream";
+import { parseChatSelectionFromBody } from "@/lib/ai/chat-selection";
 import { guardAiRoute, readAiJsonBody } from "@/lib/ai/route-helpers";
 import { validateSpecId } from "@/lib/spec-id";
 
@@ -20,6 +21,10 @@ export async function POST(request: NextRequest) {
     question?: string;
     conversationId?: string;
     stream?: boolean;
+    chatProvider?: string;
+    chatModel?: string;
+    provider?: string;
+    model?: string;
   }>(request);
   if (body instanceof NextResponse) return body;
 
@@ -38,23 +43,35 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: message }, { status: 400 });
   }
 
+  let chatSelection;
+  try {
+    chatSelection = parseChatSelectionFromBody(body);
+  } catch (e) {
+    const message = e instanceof Error ? e.message : "Invalid chat selection";
+    return NextResponse.json({ error: message }, { status: 400 });
+  }
+
   if (!isAiModuleEnabled()) {
     return NextResponse.json(
-      { error: "AI module is disabled or OPENAI_API_KEY is missing" },
+      { error: "AI module is disabled or no chat provider is configured" },
       { status: 403 }
     );
   }
+
+  const qaBase = {
+    specId,
+    question: question.slice(0, 4000),
+    conversationId: body.conversationId,
+    chatProvider: chatSelection?.provider,
+    chatModel: chatSelection?.model,
+  };
 
   if (body.stream) {
     const encoder = new TextEncoder();
     const stream = new ReadableStream({
       start(controller) {
         void streamOpenApiQuestion(
-          {
-            specId,
-            question: question.slice(0, 4000),
-            conversationId: body.conversationId,
-          },
+          qaBase,
           {
             onStatus: (phase) => {
               controller.enqueue(
@@ -98,11 +115,7 @@ export async function POST(request: NextRequest) {
   }
 
   try {
-    const result = await aiFlowService.answerQuestion({
-      specId,
-      question: question.slice(0, 4000),
-      conversationId: body.conversationId,
-    });
+    const result = await aiFlowService.answerQuestion(qaBase);
     return NextResponse.json(result);
   } catch (error) {
     console.error("POST /api/ai/question:", error);

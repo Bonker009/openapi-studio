@@ -6,6 +6,8 @@ export const AI_DEFAULTS = {
   maxOutputTokens: 1500,
   embeddingModel: "text-embedding-3-small",
   chatModel: "gpt-4o-mini",
+  /** Groq default: Meta Llama 3.3 70B Versatile (tool use, JSON mode). */
+  groqChatModel: "llama-3.3-70b-versatile",
   maxFixAttempts: 3,
   /** Stage-1: max chunks kept before reranking. */
   ragRecallPoolSize: 40,

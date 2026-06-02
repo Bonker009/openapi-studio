@@ -1,5 +1,6 @@
 import { type NextRequest, NextResponse } from "next/server";
 import { aiFlowService } from "@/features/ai/ai-flow-service";
+import { getEmbeddingDisabledReason } from "@/lib/ai/module-status";
 import { guardAiRoute, readAiJsonBody } from "@/lib/ai/route-helpers";
 import { validateSpecId } from "@/lib/spec-id";
 
@@ -22,6 +23,11 @@ export async function POST(request: NextRequest) {
   } catch (e) {
     const message = e instanceof Error ? e.message : "Invalid specId";
     return NextResponse.json({ error: message }, { status: 400 });
+  }
+
+  const embeddingReason = getEmbeddingDisabledReason();
+  if (embeddingReason) {
+    return NextResponse.json({ error: embeddingReason }, { status: 403 });
   }
 
   try {

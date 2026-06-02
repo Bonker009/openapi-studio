@@ -14,11 +14,18 @@ export type StreamQuestionCallbacks = {
   onError: (message: string) => void;
 };
 
+export type StreamQuestionChatSelection = {
+  provider: "openai" | "groq";
+  model: string;
+};
+
 export async function streamQuestionRequest(
   input: {
     specId: string;
     question: string;
     conversationId?: string;
+    chatProvider?: "openai" | "groq";
+    chatModel?: string;
     signal?: AbortSignal;
   },
   callbacks: StreamQuestionCallbacks
@@ -33,6 +40,8 @@ export async function streamQuestionRequest(
         question: input.question,
         conversationId: input.conversationId,
         stream: true,
+        chatProvider: input.chatProvider,
+        chatModel: input.chatModel,
       }),
       signal: input.signal,
     });

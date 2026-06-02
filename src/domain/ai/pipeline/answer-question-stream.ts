@@ -61,6 +61,10 @@ export async function streamOpenApiQuestion(
         instructions: DOC_STREAM_INSTRUCTIONS,
         prompt,
         signal: input.signal,
+        chat: {
+          provider: input.chatProvider,
+          model: input.chatModel,
+        },
       },
       { onDelta: handlers.onDelta }
     );

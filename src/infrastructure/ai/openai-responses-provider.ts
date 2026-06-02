@@ -108,6 +108,10 @@ export class OpenAiDocumentationAssistant implements AIDocumentationAssistant {
         input: prompt,
         schemaName: "documentation_answer",
         schema: QA_RESPONSE_JSON_SCHEMA,
+        chat: {
+          provider: input.chatProvider,
+          model: input.chatModel,
+        },
       })
     );
     const allowed = new Set(input.allowedEndpoints);

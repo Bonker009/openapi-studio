@@ -23,6 +23,19 @@ import { Textarea } from "@/components/ui/textarea";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import type {
+  AiChatProvider,
+  AiChatSettings,
+  AiConfigApiResponse,
+} from "@/components/ai/ai-chat-provider-types";
+import { formatChatModelLabel } from "@/components/ai/format-chat-model-label";
 import { cn } from "@/lib/utils";
 
 export type AiAssistantContentProps = {
@@ -44,6 +57,8 @@ type ChatMessage = {
 type PersistedAiChatState = {
   messages: ChatMessage[];
   activeTab?: string;
+  chatProvider?: AiChatProvider;
+  chatModel?: string;
 };
 
 export function AiAssistantContent({
@@ -71,6 +86,12 @@ export function AiAssistantContent({
   >("idle");
   const [streamPhase, setStreamPhase] = useState<AiStreamPhase>("idle");
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
+  const [chatCatalog, setChatCatalog] = useState<AiConfigApiResponse | null>(
+    null
+  );
+  const [chatSettings, setChatSettings] = useState<AiChatSettings | null>(
+    null
+  );
   const chatScrollRef = useRef<HTMLDivElement>(null);
   const abortRef = useRef<AbortController | null>(null);
 
@@ -87,19 +108,60 @@ export function AiAssistantContent({
   }, [defaultBaseUrl]);
 
   useEffect(() => {
-    try {
-      const raw = localStorage.getItem(chatStorageKey);
-      if (!raw) return;
-      const parsed = JSON.parse(raw) as PersistedAiChatState;
-      if (Array.isArray(parsed.messages)) {
-        setChatMessages(parsed.messages);
+    let cancelled = false;
+    void (async () => {
+      try {
+        const res = await fetch("/api/ai/config");
+        if (!res.ok || cancelled) return;
+        const catalog = (await res.json()) as AiConfigApiResponse;
+        if (cancelled) return;
+        setChatCatalog(catalog);
+
+        let stored: PersistedAiChatState | null = null;
+        try {
+          const raw = localStorage.getItem(chatStorageKey);
+          if (raw) stored = JSON.parse(raw) as PersistedAiChatState;
+        } catch {
+          stored = null;
+        }
+
+        const storedProvider = stored?.chatProvider;
+        const storedModel = stored?.chatModel?.trim();
+        const providerEntry =
+          storedProvider &&
+          catalog.providers.find((p) => p.id === storedProvider);
+        if (
+          providerEntry &&
+          storedModel &&
+          providerEntry.models.includes(storedModel)
+        ) {
+          setChatSettings({ provider: storedProvider, model: storedModel });
+        } else if (catalog.defaultProvider && catalog.defaultModel) {
+          setChatSettings({
+            provider: catalog.defaultProvider,
+            model: catalog.defaultModel,
+          });
+        } else if (catalog.providers[0]) {
+          const first = catalog.providers[0];
+          setChatSettings({
+            provider: first.id,
+            model: first.defaultModel,
+          });
+        }
+
+        if (stored && Array.isArray(stored.messages)) {
+          setChatMessages(stored.messages);
+        }
+        if (stored?.activeTab) {
+          setActiveTab(stored.activeTab);
+        }
+      } catch {
+        // ignore config load errors
       }
-      if (parsed.activeTab) {
-        setActiveTab(parsed.activeTab);
-      }
-    } catch {
-      // ignore invalid cache content
-    }
+    })();
+    return () => {
+      cancelled = true;
+    };
   }, [chatStorageKey]);
 
   useEffect(() => {
@@ -109,12 +171,32 @@ export function AiAssistantContent({
           .slice(-50)
           .map(({ streaming: _s, ...rest }) => rest),
         activeTab,
+        chatProvider: chatSettings?.provider,
+        chatModel: chatSettings?.model,
       };
       localStorage.setItem(chatStorageKey, JSON.stringify(payload));
     } catch {
       // ignore quota/storage errors
     }
-  }, [chatMessages, activeTab, chatStorageKey]);
+  }, [chatMessages, activeTab, chatSettings, chatStorageKey]);
+
+  const activeProviderEntry = useMemo(() => {
+    if (!chatCatalog || !chatSettings) return null;
+    return (
+      chatCatalog.providers.find((p) => p.id === chatSettings.provider) ?? null
+    );
+  }, [chatCatalog, chatSettings]);
+
+  const modelOptions = activeProviderEntry?.models ?? [];
+
+  function handleProviderChange(nextProvider: AiChatProvider) {
+    const entry = chatCatalog?.providers.find((p) => p.id === nextProvider);
+    if (!entry) return;
+    setChatSettings({
+      provider: nextProvider,
+      model: entry.defaultModel,
+    });
+  }
 
   useEffect(() => {
     const el = chatScrollRef.current;
@@ -176,7 +258,7 @@ export function AiAssistantContent({
 
   async function handleAskQuestion() {
     const q = question.trim();
-    if (!q || asking) return;
+    if (!q || asking || !chatSettings) return;
 
     const userMsg: ChatMessage = {
       id: `u-${Date.now()}`,
@@ -201,7 +283,13 @@ export function AiAssistantContent({
     abortRef.current = ac;
 
     await streamQuestionRequest(
-      { specId, question: q, signal: ac.signal },
+      {
+        specId,
+        question: q,
+        signal: ac.signal,
+        chatProvider: chatSettings.provider,
+        chatModel: chatSettings.model,
+      },
       {
         onOpen: () => {
           setStreamPhase((prev) =>
@@ -385,6 +473,54 @@ export function AiAssistantContent({
             )}
           </div>
           <div className="mt-3 shrink-0 space-y-2 border-t pt-3">
+            {chatCatalog && chatCatalog.providers.length > 0 ? (
+              <div className="flex flex-wrap items-center gap-2">
+                <Select
+                  value={chatSettings?.provider ?? ""}
+                  onValueChange={(v) =>
+                    handleProviderChange(v as AiChatProvider)
+                  }
+                  disabled={asking}
+                >
+                  <SelectTrigger size="sm" className="w-[120px]">
+                    <SelectValue placeholder="Provider" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {chatCatalog.providers.map((p) => (
+                      <SelectItem key={p.id} value={p.id}>
+                        {p.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <Select
+                  value={chatSettings?.model ?? ""}
+                  onValueChange={(model) =>
+                    setChatSettings((prev) =>
+                      prev ? { ...prev, model } : prev
+                    )
+                  }
+                  disabled={asking || modelOptions.length === 0}
+                >
+                  <SelectTrigger size="sm" className="min-w-[180px] flex-1">
+                    <SelectValue placeholder="Model" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {modelOptions.map((m) => (
+                      <SelectItem key={m} value={m}>
+                        {chatSettings
+                          ? formatChatModelLabel(chatSettings.provider, m)
+                          : m}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            ) : chatCatalog && !chatCatalog.enabled ? (
+              <p className="text-xs text-muted-foreground">
+                {chatCatalog.disabledReason ?? "AI chat is not configured."}
+              </p>
+            ) : null}
             {asking ? <AiChatComposerStatus phase={streamPhase} /> : null}
             <Textarea
               value={question}
@@ -398,7 +534,7 @@ export function AiAssistantContent({
                 "min-h-11 max-h-28 resize-none",
                 asking && "opacity-80"
               )}
-              disabled={asking}
+              disabled={asking || !chatSettings}
               onKeyDown={(e) => {
                 if (e.key === "Enter" && !e.shiftKey) {
                   e.preventDefault();
@@ -422,7 +558,7 @@ export function AiAssistantContent({
                   type="button"
                   size="sm"
                   onClick={() => void handleAskQuestion()}
-                  disabled={!question.trim()}
+                  disabled={!question.trim() || !chatSettings}
                 >
                   Send
                 </Button>
