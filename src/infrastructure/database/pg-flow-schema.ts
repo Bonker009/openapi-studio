@@ -242,3 +242,131 @@ export type PgFlowStep = typeof pgFlowSteps.$inferSelect;
 export type PgEnvironment = typeof pgEnvironments.$inferSelect;
 export type PgFlowRun = typeof pgFlowRuns.$inferSelect;
 export type PgStepResult = typeof pgStepResults.$inferSelect;
+
+export const pgAiConversations = pgTable(
+  "ai_conversations",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    specId: text("spec_id")
+      .notNull()
+      .references(() => pgSpecs.id, { onDelete: "cascade" }),
+    kind: text("kind").notNull(),
+    title: text("title"),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => [index("ai_conversations_spec_idx").on(table.specId)]
+);
+
+export const pgAiMessages = pgTable(
+  "ai_messages",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    conversationId: uuid("conversation_id")
+      .notNull()
+      .references(() => pgAiConversations.id, { onDelete: "cascade" }),
+    role: text("role").notNull(),
+    content: text("content").notNull(),
+    metadata: jsonb("metadata").notNull().default({}),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => [index("ai_messages_conversation_idx").on(table.conversationId)]
+);
+
+export const pgAiGenerations = pgTable(
+  "ai_generations",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    specId: text("spec_id")
+      .notNull()
+      .references(() => pgSpecs.id, { onDelete: "cascade" }),
+    conversationId: uuid("conversation_id").references(() => pgAiConversations.id, {
+      onDelete: "set null",
+    }),
+    kind: text("kind").notNull(),
+    inputJson: jsonb("input_json").notNull().default({}),
+    outputJson: jsonb("output_json").notNull().default({}),
+    validationJson: jsonb("validation_json").notNull().default({}),
+    attempt: integer("attempt").notNull().default(1),
+    status: text("status").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => [
+    index("ai_generations_spec_created_idx").on(table.specId, table.createdAt),
+  ]
+);
+
+export const pgEndpointIndex = pgTable(
+  "endpoint_index",
+  {
+    specId: text("spec_id")
+      .notNull()
+      .references(() => pgSpecs.id, { onDelete: "cascade" }),
+    endpointKey: text("endpoint_key").notNull(),
+    method: text("method").notNull(),
+    path: text("path").notNull(),
+    requiresAuth: boolean("requires_auth").notNull().default(false),
+    summary: text("summary"),
+    searchText: text("search_text").notNull().default(""),
+    metadata: jsonb("metadata").notNull().default({}),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => [
+    primaryKey({ columns: [table.specId, table.endpointKey] }),
+    index("endpoint_index_spec_method_idx").on(table.specId, table.method),
+  ]
+);
+
+export const pgOpenapiChunks = pgTable(
+  "openapi_chunks",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    specId: text("spec_id")
+      .notNull()
+      .references(() => pgSpecs.id, { onDelete: "cascade" }),
+    chunkKey: text("chunk_key").notNull(),
+    chunkType: text("chunk_type").notNull(),
+    endpointKey: text("endpoint_key"),
+    title: text("title").notNull(),
+    content: text("content").notNull(),
+    metadata: jsonb("metadata").notNull().default({}),
+    embeddingJson: jsonb("embedding_json"),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => [
+    uniqueIndex("openapi_chunks_spec_chunk_key_uq").on(table.specId, table.chunkKey),
+    index("openapi_chunks_spec_type_idx").on(table.specId, table.chunkType),
+  ]
+);
+
+export const pgFlowAiCache = pgTable(
+  "flow_ai_cache",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    specId: text("spec_id")
+      .notNull()
+      .references(() => pgSpecs.id, { onDelete: "cascade" }),
+    cacheKey: text("cache_key").notNull(),
+    flowSchemaJson: jsonb("flow_schema_json").notNull(),
+    internalFlowJson: jsonb("internal_flow_json").notNull(),
+    metadata: jsonb("metadata").notNull().default({}),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => [
+    uniqueIndex("flow_ai_cache_spec_key_uq").on(table.specId, table.cacheKey),
+  ]
+);

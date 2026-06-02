@@ -83,6 +83,7 @@ import {
 } from "@/lib/flows/types";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
+import { AiFloatingButton } from "@/components/ai/ai-floating-button";
 
 type PauseState = {
   stepId: string;
@@ -250,6 +251,22 @@ export function FlowShell({
     setRunOutcome(null);
     setFlowsDialogOpen(false);
   };
+
+  const applyGeneratedFlow = useCallback(
+    (flow: Flow) => {
+      if (dirty && !confirm("Replace the current draft with the AI-generated flow?")) {
+        return;
+      }
+      setDraft(flow);
+      setSavedSnapshot("");
+      setRunResults([]);
+      setRunOutcome(null);
+      setSelectedStepId(null);
+      setActiveTab("builder");
+      toast.success("AI flow applied to draft");
+    },
+    [dirty]
+  );
 
   const duplicateFlow = () => {
     const copy: Flow = {
@@ -959,6 +976,12 @@ export function FlowShell({
           )}
         </DialogContent>
       </Dialog>
+
+      <AiFloatingButton
+        specId={specId}
+        defaultBaseUrl={baseUrl}
+        onApplyGeneratedFlow={applyGeneratedFlow}
+      />
     </div>
   );
 }

@@ -225,6 +225,21 @@
   }
 }
 
+@keyframes ai-chat-cursor-blink {
+  0%,
+  45% {
+    opacity: 1;
+  }
+  50%,
+  100% {
+    opacity: 0;
+  }
+}
+
+.ai-chat-stream-cursor {
+  animation: ai-chat-cursor-blink 1s step-end infinite;
+}
+
 /* JSON tree / code viewer */
 .json-tree-root {
   font-family: var(--font-mono), ui-monospace, monospace;

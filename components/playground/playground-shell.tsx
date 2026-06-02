@@ -18,6 +18,7 @@ import {
   type Credential,
 } from "@/lib/playground/credentials";
 import { cn } from "@/lib/utils";
+import { AiFloatingButton } from "@/components/ai/ai-floating-button";
 
 type PlaygroundShellProps = {
   specId: string;
@@ -305,6 +306,8 @@ export function PlaygroundShell({
           />
         </div>
       </main>
+
+      <AiFloatingButton specId={specId} defaultBaseUrl={baseUrl} />
     </>
   );
 }

@@ -32,6 +32,14 @@ npm run dev
 | `DATABASE_URL` | Yes | PostgreSQL connection string |
 | `INTERNAL_APP_URL` | Recommended in Docker | `http://127.0.0.1:3000` for server-side fetches |
 | `NODE_OPTIONS` | Set in Compose | `--dns-result-order=ipv4first` |
+| `OPENAI_API_KEY` | For `/api/ai/*` | OpenAI API key (must reach the **web** container via `.env`) |
+| `ENABLE_AI` | Optional | Set to `false` to disable AI routes (default enabled when key is set) |
+
+The `web` service loads `.env` via `env_file` and passes AI variables into the container. After changing `.env`, restart:
+
+```bash
+docker compose -f docker-compose.db.yml -f docker-compose.postgres.yml up -d --build
+```
 
 ## Troubleshooting
 

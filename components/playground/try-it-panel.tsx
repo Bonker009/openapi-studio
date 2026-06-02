@@ -47,12 +47,15 @@ import {
 import {
   clearPlaygroundRequestBody,
   getPlaygroundRequestBodies,
+  getPlaygroundRequestParams,
   setPlaygroundRequestBody,
+  setPlaygroundRequestParams,
 } from "@/lib/playground/storage";
 import { assertPlaygroundRequestUrl } from "@/lib/playground/url-policy";
 import {
   buildRequestUrl,
-  defaultParamValues,
+  mergeSavedParamValues,
+  paramPlaceholderHint,
   rebuildRequestUrlPreservingOrigin,
 } from "@/lib/playground/build-request";
 import { buildCurlCommand, type CurlBodyInput } from "@/lib/playground/build-curl";
@@ -94,12 +97,6 @@ type TryItPanelProps = {
   onSelectFirst?: () => void;
 };
 
-function defaultPlaceholder(p: OpenApiParameter): string {
-  if (p.schema?.default != null) return String(p.schema.default);
-  if (p.schema?.enum?.[0]) return String(p.schema.enum[0]);
-  return p.schema?.type ?? "string";
-}
-
 export function TryItPanel({
   specId,
   endpoint,
@@ -132,6 +129,9 @@ export function TryItPanel({
   const [bodySectionOpen, setBodySectionOpen] = useState(true);
   const skipOriginPreserveRef = useRef(false);
   const persistRequestBodyTimerRef = useRef<ReturnType<typeof setTimeout> | null>(
+    null
+  );
+  const persistRequestParamsTimerRef = useRef<ReturnType<typeof setTimeout> | null>(
     null
   );
 
@@ -174,8 +174,18 @@ export function TryItPanel({
       if (persistRequestBodyTimerRef.current) {
         clearTimeout(persistRequestBodyTimerRef.current);
       }
+      if (persistRequestParamsTimerRef.current) {
+        clearTimeout(persistRequestParamsTimerRef.current);
+      }
     };
   }, []);
+
+  const pathQueryParams = useMemo(
+    () =>
+      endpoint?.parameters.filter((p) => p.in === "path" || p.in === "query") ??
+      [],
+    [endpoint]
+  );
 
   const resetMultipartBody = useCallback(() => {
     setMultipartState(
@@ -231,14 +241,27 @@ export function TryItPanel({
 
   useEffect(() => {
     if (!endpoint) return;
-    setParamValues(defaultParamValues(endpoint.parameters));
-    setHeaderValues(defaultParamValues(headerParams));
+    const key = buildEndpointKey(endpoint.method, endpoint.path);
+    const savedParams = getPlaygroundRequestParams(specId)[key];
+    const nextParams = mergeSavedParamValues(
+      pathQueryParams,
+      savedParams?.paramValues
+    );
+    const nextHeaders = mergeSavedParamValues(
+      headerParams,
+      savedParams?.headerValues
+    );
+    setParamValues(nextParams);
+    setHeaderValues(nextHeaders);
+    setRequestUrl(
+      buildRequestUrl(baseUrl, endpoint.path, nextParams, endpoint.parameters)
+    );
+    skipOriginPreserveRef.current = true;
     setResponseStatus(null);
     setResponseTime(null);
     setResponseBody("");
     setResponseHeaders({});
     if (endpoint.hasRequestBody && bodyKind === "json") {
-      const key = buildEndpointKey(endpoint.method, endpoint.path);
       const savedBody = getPlaygroundRequestBodies(specId)[key];
       if (typeof savedBody === "string") {
         setRequestBody(savedBody);
@@ -249,7 +272,15 @@ export function TryItPanel({
       resetSampleBody();
     }
     setActiveTab("request");
-  }, [endpoint, headerParams, resetSampleBody, bodyKind, specId]);
+  }, [
+    endpoint,
+    headerParams,
+    pathQueryParams,
+    resetSampleBody,
+    bodyKind,
+    specId,
+    baseUrl,
+  ]);
 
   useEffect(() => {
     if (!endpoint || !endpoint.hasRequestBody || bodyKind !== "json") return;
@@ -274,6 +305,31 @@ export function TryItPanel({
     requestBody,
   ]);
 
+  useEffect(() => {
+    if (!endpoint) return;
+    if (persistRequestParamsTimerRef.current) {
+      clearTimeout(persistRequestParamsTimerRef.current);
+    }
+    const key = buildEndpointKey(endpoint.method, endpoint.path);
+    persistRequestParamsTimerRef.current = setTimeout(() => {
+      setPlaygroundRequestParams(specId, key, {
+        paramValues,
+        headerValues,
+      });
+    }, 300);
+    return () => {
+      if (persistRequestParamsTimerRef.current) {
+        clearTimeout(persistRequestParamsTimerRef.current);
+      }
+    };
+  }, [
+    specId,
+    endpoint?.method,
+    endpoint?.path,
+    paramValues,
+    headerValues,
+  ]);
+
   const syncRequestUrlFromParams = useCallback(() => {
     if (!endpoint) return;
     setRequestUrl(
@@ -281,7 +337,7 @@ export function TryItPanel({
     );
   }, [baseUrl, endpoint, paramValues]);
 
-  // Environment or endpoint change → always use the selected server base URL.
+  // Environment base URL change → rebuild URL from current params.
   useEffect(() => {
     if (!endpoint) {
       setRequestUrl("");
@@ -292,7 +348,8 @@ export function TryItPanel({
       buildRequestUrl(baseUrl, endpoint.path, paramValues, endpoint.parameters)
     );
     skipOriginPreserveRef.current = true;
-  }, [baseUrl, endpoint?.path, endpoint?.method]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- only rebuild when server base changes
+  }, [baseUrl]);
 
   // Query/path param edits only → keep a manually typed host (e.g. localhost:9090).
   useEffect(() => {
@@ -584,7 +641,7 @@ export function TryItPanel({
             value={value}
             onChange={(e) => setValue(e.target.value)}
             className="h-8 font-mono text-sm"
-            placeholder={defaultPlaceholder(p)}
+            placeholder={paramPlaceholderHint(p)}
           />
         )}
       </div>
@@ -640,6 +697,11 @@ export function TryItPanel({
   const authWarning =
     needsPlaygroundAuth && !credentialRequiresAuth(activeCredential);
   const authSatisfied = credentialRequiresAuth(activeCredential);
+  const hasRequestParams =
+    pathParams.length > 0 ||
+    queryParams.length > 0 ||
+    headerParams.length > 0;
+  const showRequestCard = hasRequestParams || authWarning;
 
   return (
     <div
@@ -716,6 +778,12 @@ export function TryItPanel({
               <Copy className="h-3.5 w-3.5" />
             )}
           </Button>
+          {responseStatus != null && (
+            <span className="rounded-full bg-muted px-2 py-1 text-[11px] text-muted-foreground tabular-nums shrink-0">
+              Last {responseStatus}
+              {responseTime != null && ` · ${responseTime} ms`}
+            </span>
+          )}
         </div>
       </div>
 
@@ -740,24 +808,20 @@ export function TryItPanel({
           >
             <div className="flex h-full min-h-0 flex-1 flex-col gap-4 xl:flex-row">
               <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain space-y-4 pr-1 xl:min-w-0">
+                {showRequestCard && (
                 <div className="rounded-xl border border-border bg-background p-4 space-y-4">
-                  <div className="flex items-center justify-between gap-3">
-                    <div>
-                      <p className="text-xs font-semibold text-foreground">
-                        Request
-                      </p>
-                      <p className="text-[11px] text-muted-foreground">
-                        Path and URL are always visible; expand sections below as
-                        needed.
-                      </p>
-                    </div>
-                    {responseStatus != null && (
-                      <span className="rounded-full bg-muted px-2 py-1 text-[11px] text-muted-foreground tabular-nums shrink-0">
-                        Last {responseStatus}
-                        {responseTime != null && ` · ${responseTime} ms`}
-                      </span>
+                  {hasRequestParams && (
+                  <div>
+                    <p className="text-xs font-semibold text-foreground">
+                      Parameters
+                    </p>
+                    {(queryParams.length > 0 || headerParams.length > 0) && (
+                    <p className="text-[11px] text-muted-foreground">
+                      Expand sections below as needed.
+                    </p>
                     )}
                   </div>
+                  )}
 
                   {pathParams.length > 0 && (
                     <div>
@@ -817,14 +881,6 @@ export function TryItPanel({
                       </CollapsibleContent>
                     </Collapsible>
                   )}
-                  {pathParams.length === 0 &&
-                    queryParams.length === 0 &&
-                    headerParams.length === 0 && (
-                      <p className="text-xs text-muted-foreground">
-                        This operation has no parameters.
-                      </p>
-                    )}
-
                   {authWarning && (
                     <div className="rounded-lg border border-warning/30 bg-warning/10 px-3 py-2 text-xs text-warning">
                       This endpoint requires a Bearer token. Add or select a role
@@ -832,7 +888,9 @@ export function TryItPanel({
                     </div>
                   )}
                 </div>
+                )}
 
+                {endpoint.hasRequestBody && (
                 <Collapsible
                   open={bodySectionOpen}
                   onOpenChange={setBodySectionOpen}
@@ -846,9 +904,7 @@ export function TryItPanel({
                         size="sm"
                         className="h-8 flex-1 justify-between px-2 text-xs font-semibold text-foreground"
                       >
-                        {endpoint.hasRequestBody
-                          ? `Body${requestBodyInfo.contentType ? ` (${requestBodyInfo.contentType})` : ""}`
-                          : "Body"}
+                        {`Body${requestBodyInfo.contentType ? ` (${requestBodyInfo.contentType})` : ""}`}
                         {bodySectionOpen ? (
                           <ChevronUp className="h-3.5 w-3.5 shrink-0" />
                         ) : (
@@ -858,7 +914,6 @@ export function TryItPanel({
                     </CollapsibleTrigger>
                   </div>
                   <CollapsibleContent className="p-4 pt-3 space-y-3">
-                  {endpoint.hasRequestBody ? (
                     <div className="space-y-2">
                       <Label id="request-body-label" className="sr-only">
                         Request body
@@ -933,13 +988,9 @@ export function TryItPanel({
                         </div>
                       )}
                     </div>
-                  ) : (
-                    <p className="text-xs text-muted-foreground">
-                      This operation has no request body.
-                    </p>
-                  )}
                   </CollapsibleContent>
                 </Collapsible>
+                )}
 
                 <Collapsible
                   open={curlOpen}

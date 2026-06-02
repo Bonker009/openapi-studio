@@ -12,7 +12,8 @@ export function buildRequestUrl(
   parameters
     .filter((p) => p.in === "path")
     .forEach((p) => {
-      const value = paramValues[p.name] ?? `{${p.name}}`;
+      const trimmed = paramValues[p.name]?.trim();
+      const value = trimmed ? trimmed : `{${p.name}}`;
       resolvedPath = resolvedPath.replace(`{${p.name}}`, encodeURIComponent(value));
     });
 
@@ -49,6 +50,45 @@ export function rebuildRequestUrlPreservingOrigin(
   }
 }
 
+/** Empty values for interactive UI (Try It); hints go in placeholders. */
+export function emptyParamValues(
+  parameters: OpenApiParameter[]
+): Record<string, string> {
+  const values: Record<string, string> = {};
+  for (const p of parameters) {
+    if (p.in !== "path" && p.in !== "query" && p.in !== "header") continue;
+    values[p.name] = "";
+  }
+  return values;
+}
+
+export function mergeSavedParamValues(
+  parameters: OpenApiParameter[],
+  saved?: Record<string, string>
+): Record<string, string> {
+  const merged = emptyParamValues(parameters);
+  if (!saved) return merged;
+  for (const p of parameters) {
+    if (p.name in saved) merged[p.name] = saved[p.name] ?? "";
+  }
+  return merged;
+}
+
+/** Placeholder hint for param inputs (not sent as real values). */
+export function paramPlaceholderHint(p: OpenApiParameter): string {
+  if (p.schema?.default != null) return String(p.schema.default);
+  if (p.schema?.enum?.[0]) return String(p.schema.enum[0]);
+  if (p.schema?.type === "boolean") return "true";
+  if (p.schema?.type === "integer" || p.schema?.type === "number") return "1";
+  if (p.schema?.format === "uuid") {
+    return "123e4567-e89b-12d3-a456-426614174000";
+  }
+  if (p.in === "path") return p.name;
+  if (p.in === "query") return "value";
+  return p.schema?.type ?? "string";
+}
+
+/** Concrete values for smoke tests, validation, and flow automation. */
 export function defaultParamValues(
   parameters: OpenApiParameter[]
 ): Record<string, string> {

@@ -99,6 +99,42 @@ export function clearPlaygroundRequestBody(
   safeSet(prefix(specId, "request_bodies"), next);
 }
 
+export type StoredRequestParams = {
+  paramValues: Record<string, string>;
+  headerValues: Record<string, string>;
+};
+
+export function getPlaygroundRequestParams(
+  specId: string
+): Record<string, StoredRequestParams> {
+  return safeGet<Record<string, StoredRequestParams>>(
+    prefix(specId, "request_params")
+  ) ?? {};
+}
+
+export function setPlaygroundRequestParams(
+  specId: string,
+  endpointKey: string,
+  params: StoredRequestParams
+): void {
+  const current = getPlaygroundRequestParams(specId);
+  safeSet(prefix(specId, "request_params"), {
+    ...current,
+    [endpointKey]: params,
+  });
+}
+
+export function clearPlaygroundRequestParams(
+  specId: string,
+  endpointKey: string
+): void {
+  const current = getPlaygroundRequestParams(specId);
+  if (!(endpointKey in current)) return;
+  const next = { ...current };
+  delete next[endpointKey];
+  safeSet(prefix(specId, "request_params"), next);
+}
+
 export type StoredValidationConfig = {
   concurrency: number;
   passPolicyKind: "4xx" | "strict-400" | "4xx-or-422" | "custom-range";
