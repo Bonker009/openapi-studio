@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, useCallback } from "react";
 import { Loader2, RefreshCw, Square } from "lucide-react";
 import type {
   GenerateFlowOutput,
@@ -36,6 +36,11 @@ import type {
   AiConfigApiResponse,
 } from "@/components/ai/ai-chat-provider-types";
 import { formatChatModelLabel } from "@/components/ai/format-chat-model-label";
+import {
+  loadAiAssistantState,
+  saveAiAssistantState,
+  type PersistedChatMessage,
+} from "@/components/ai/ai-assistant-persistence";
 import { cn } from "@/lib/utils";
 
 export type AiAssistantContentProps = {
@@ -46,19 +51,8 @@ export type AiAssistantContentProps = {
   className?: string;
 };
 
-type ChatMessage = {
-  id: string;
-  role: "user" | "assistant" | "error";
-  content: string;
-  citedEndpoints?: string[];
+type ChatMessage = PersistedChatMessage & {
   streaming?: boolean;
-};
-
-type PersistedAiChatState = {
-  messages: ChatMessage[];
-  activeTab?: string;
-  chatProvider?: AiChatProvider;
-  chatModel?: string;
 };
 
 export function AiAssistantContent({
@@ -67,9 +61,18 @@ export function AiAssistantContent({
   onApplyGeneratedFlow,
   className,
 }: AiAssistantContentProps) {
-  const [activeTab, setActiveTab] = useState("qa");
+  const initialPersisted = useMemo(
+    () => loadAiAssistantState(specId),
+    [specId]
+  );
+
+  const [activeTab, setActiveTab] = useState(
+    () => initialPersisted.activeTab ?? "qa"
+  );
   const [indexing, setIndexing] = useState(false);
-  const [indexResult, setIndexResult] = useState<IndexOpenApiResult | null>(null);
+  const [indexResult, setIndexResult] = useState<IndexOpenApiResult | null>(
+    () => initialPersisted.indexResult ?? null
+  );
   const [indexError, setIndexError] = useState<string | null>(null);
 
   const [intent, setIntent] = useState(
@@ -85,7 +88,9 @@ export function AiAssistantContent({
     "idle" | "connecting" | "streaming" | "error"
   >("idle");
   const [streamPhase, setStreamPhase] = useState<AiStreamPhase>("idle");
-  const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
+  const [chatMessages, setChatMessages] = useState<ChatMessage[]>(
+    () => initialPersisted.messages
+  );
   const [chatCatalog, setChatCatalog] = useState<AiConfigApiResponse | null>(
     null
   );
@@ -98,14 +103,28 @@ export function AiAssistantContent({
   const asking =
     chatStatus === "connecting" || chatStatus === "streaming";
 
-  const chatStorageKey = useMemo(
-    () => `ai_assistant_chat:${specId}`,
-    [specId]
-  );
+  const persistToStorage = useCallback(() => {
+    saveAiAssistantState(specId, {
+      messages: chatMessages
+        .slice(-50)
+        .map(({ streaming: _s, ...rest }) => rest),
+      activeTab,
+      chatProvider: chatSettings?.provider,
+      chatModel: chatSettings?.model,
+      indexResult,
+    });
+  }, [specId, chatMessages, activeTab, chatSettings, indexResult]);
 
   useEffect(() => {
     if (defaultBaseUrl) setBaseUrl(defaultBaseUrl);
   }, [defaultBaseUrl]);
+
+  useEffect(() => {
+    const stored = loadAiAssistantState(specId);
+    setChatMessages(stored.messages);
+    setIndexResult(stored.indexResult ?? null);
+    setActiveTab(stored.activeTab ?? "qa");
+  }, [specId]);
 
   useEffect(() => {
     let cancelled = false;
@@ -117,16 +136,9 @@ export function AiAssistantContent({
         if (cancelled) return;
         setChatCatalog(catalog);
 
-        let stored: PersistedAiChatState | null = null;
-        try {
-          const raw = localStorage.getItem(chatStorageKey);
-          if (raw) stored = JSON.parse(raw) as PersistedAiChatState;
-        } catch {
-          stored = null;
-        }
-
-        const storedProvider = stored?.chatProvider;
-        const storedModel = stored?.chatModel?.trim();
+        const stored = loadAiAssistantState(specId);
+        const storedProvider = stored.chatProvider;
+        const storedModel = stored.chatModel?.trim();
         const providerEntry =
           storedProvider &&
           catalog.providers.find((p) => p.id === storedProvider);
@@ -148,13 +160,6 @@ export function AiAssistantContent({
             model: first.defaultModel,
           });
         }
-
-        if (stored && Array.isArray(stored.messages)) {
-          setChatMessages(stored.messages);
-        }
-        if (stored?.activeTab) {
-          setActiveTab(stored.activeTab);
-        }
       } catch {
         // ignore config load errors
       }
@@ -162,23 +167,25 @@ export function AiAssistantContent({
     return () => {
       cancelled = true;
     };
-  }, [chatStorageKey]);
+  }, [specId]);
 
   useEffect(() => {
-    try {
-      const payload: PersistedAiChatState = {
+    persistToStorage();
+  }, [persistToStorage]);
+
+  useEffect(() => {
+    return () => {
+      saveAiAssistantState(specId, {
         messages: chatMessages
           .slice(-50)
           .map(({ streaming: _s, ...rest }) => rest),
         activeTab,
         chatProvider: chatSettings?.provider,
         chatModel: chatSettings?.model,
-      };
-      localStorage.setItem(chatStorageKey, JSON.stringify(payload));
-    } catch {
-      // ignore quota/storage errors
-    }
-  }, [chatMessages, activeTab, chatSettings, chatStorageKey]);
+        indexResult,
+      });
+    };
+  }, [specId, chatMessages, activeTab, chatSettings, indexResult]);
 
   const activeProviderEntry = useMemo(() => {
     if (!chatCatalog || !chatSettings) return null;

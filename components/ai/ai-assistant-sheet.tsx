@@ -30,7 +30,8 @@ export function AiAssistantSheet({
     <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetContent
         side="right"
-        className="flex h-full w-full flex-col gap-0 p-0 sm:max-w-xl md:max-w-2xl"
+        forceMount
+        className="flex h-full w-full flex-col gap-0 p-0 sm:max-w-xl md:max-w-2xl data-[state=closed]:pointer-events-none"
       >
         <SheetHeader className="shrink-0 border-b px-6 py-4 text-left">
           <SheetTitle className="flex items-center gap-2">
