@@ -53,6 +53,10 @@ export type StepExecutorOptions = {
   defaultCredential: FlowCredential | null;
   requestPort: FlowRequestPort;
   execute: FlowExecutor;
+  prepareStep?: (state: {
+    credentials: FlowCredential[];
+    defaultCredential: FlowCredential | null;
+  }) => Promise<void>;
 };
 
 export class StepExecutor {
@@ -130,6 +134,13 @@ export class StepExecutor {
       return this.finalize(base, {
         outcome: "error",
         error: `Unresolved references: ${[...new Set(missing)].join(", ")}`,
+      });
+    }
+
+    if (opts.prepareStep) {
+      await opts.prepareStep({
+        credentials: opts.credentials,
+        defaultCredential: opts.defaultCredential,
       });
     }
 

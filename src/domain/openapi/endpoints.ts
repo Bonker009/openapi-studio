@@ -11,6 +11,8 @@ export type OpenApiParameter = {
   };
 };
 
+export type EndpointAuthRole = "none" | "login" | "refresh" | "protected";
+
 export type PlaygroundEndpoint = {
   path: string;
   method: string;
@@ -21,6 +23,8 @@ export type PlaygroundEndpoint = {
   parameters: OpenApiParameter[];
   hasRequestBody: boolean;
   requiresAuth: boolean;
+  /** Effective role for playground auth (OpenAPI + per-spec overrides). */
+  authRole?: EndpointAuthRole;
 };
 
 export function requiresAuth(

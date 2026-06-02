@@ -25,6 +25,18 @@ export type Credential =
       scope?: string;
       accessToken?: string;
       expiresAt?: number;
+    }
+  | {
+      id: string;
+      name: string;
+      type: "oauth2rt";
+      tokenUrl: string;
+      clientId: string;
+      clientSecret: string;
+      scope?: string;
+      refreshToken: string;
+      accessToken?: string;
+      expiresAt?: number;
     };
 
 export type CredentialType = Credential["type"];
@@ -107,7 +119,7 @@ export function getActiveCredential(specId: string): Credential | null {
 
 export function credentialRequiresAuth(credential: Credential | null): boolean {
   if (!credential) return false;
-  if (credential.type === "oauth2cc") {
+  if (credential.type === "oauth2cc" || credential.type === "oauth2rt") {
     return Boolean(credential.accessToken?.trim());
   }
   if (credential.type === "bearer") return Boolean(credential.token?.trim());

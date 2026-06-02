@@ -34,6 +34,11 @@ import {
   isExpired,
   isExpiringSoon,
 } from "@/lib/playground/token-utils";
+import {
+  credentialNeedsRefresh,
+  refreshCredential,
+  TOKEN_REFRESH_LEAD_SECONDS,
+} from "@/lib/playground/token-lifecycle";
 import { useTokenExpiry } from "@/lib/playground/use-token-expiry";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
@@ -50,33 +55,19 @@ const CREDENTIAL_TYPES: { value: CredentialType; label: string }[] = [
   { value: "basic", label: "Basic auth" },
   { value: "apiKey", label: "API key" },
   { value: "oauth2cc", label: "OAuth2 (client credentials)" },
+  { value: "oauth2rt", label: "OAuth2 (refresh token)" },
 ];
 
 function expirySource(credential: Credential | null): string | number | null {
   if (!credential) return null;
-  if (credential.type === "oauth2cc" && credential.expiresAt) {
+  if (
+    (credential.type === "oauth2cc" || credential.type === "oauth2rt") &&
+    credential.expiresAt
+  ) {
     return credential.expiresAt;
   }
   if (credential.type === "bearer") return credential.token;
   return null;
-}
-
-async function fetchOAuthToken(credential: Extract<Credential, { type: "oauth2cc" }>) {
-  const res = await fetch("/api/playground/oauth/token", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      tokenUrl: credential.tokenUrl,
-      clientId: credential.clientId,
-      clientSecret: credential.clientSecret,
-      scope: credential.scope,
-    }),
-  });
-  const data = await res.json();
-  if (!res.ok) {
-    throw new Error(data.error ?? "Failed to fetch token");
-  }
-  return data as { accessToken: string; expiresAt: number };
 }
 
 export function TokenPanel({
@@ -103,12 +94,14 @@ export function TokenPanel({
   const [oauthClientId, setOauthClientId] = useState("");
   const [oauthSecret, setOauthSecret] = useState("");
   const [oauthScope, setOauthScope] = useState("");
+  const [oauthRefreshToken, setOauthRefreshToken] = useState("");
 
   const expirySubject = expirySource(activeCredential);
   useTokenExpiry({
     token: activeCredential?.type === "bearer" ? activeCredential.token : null,
     expiresAt:
-      activeCredential?.type === "oauth2cc"
+      activeCredential?.type === "oauth2cc" ||
+      activeCredential?.type === "oauth2rt"
         ? activeCredential.expiresAt
         : null,
   });
@@ -155,24 +148,27 @@ export function TokenPanel({
   }, [expirySubject]);
 
   useEffect(() => {
-    if (activeCredential?.type !== "oauth2cc") return;
-    const cred = activeCredential;
-    if (!cred.expiresAt) return;
-    const secs = cred.expiresAt - Math.floor(Date.now() / 1000);
-    if (secs > 30) return;
+    if (!activeCredential) return;
+    if (
+      activeCredential.type !== "oauth2cc" &&
+      activeCredential.type !== "oauth2rt"
+    ) {
+      return;
+    }
+    if (
+      !credentialNeedsRefresh(activeCredential, TOKEN_REFRESH_LEAD_SECONDS)
+    ) {
+      return;
+    }
 
+    const cred = activeCredential;
     let cancelled = false;
     (async () => {
       try {
-        const data = await fetchOAuthToken(cred);
+        const updated = await refreshCredential(specId, cred);
         if (cancelled) return;
-        const next = credentials.map((c) =>
-          c.id === cred.id
-            ? { ...c, accessToken: data.accessToken, expiresAt: data.expiresAt }
-            : c
-        );
+        const next = credentials.map((c) => (c.id === cred.id ? updated : c));
         persist(next);
-        const updated = next.find((c) => c.id === cred.id) ?? null;
         if (getActiveCredentialId(specId) === cred.id) {
           onActiveChange(updated);
         }
@@ -196,6 +192,7 @@ export function TokenPanel({
     setOauthClientId("");
     setOauthSecret("");
     setOauthScope("");
+    setOauthRefreshToken("");
   };
 
   const buildNewCredential = (): Credential | null => {
@@ -241,6 +238,26 @@ export function TokenPanel({
         scope: oauthScope.trim() || undefined,
       };
     }
+    if (addType === "oauth2rt") {
+      if (
+        !oauthUrl.trim() ||
+        !oauthClientId.trim() ||
+        !oauthSecret.trim() ||
+        !oauthRefreshToken.trim()
+      ) {
+        return null;
+      }
+      return {
+        id,
+        name,
+        type: "oauth2rt",
+        tokenUrl: oauthUrl.trim(),
+        clientId: oauthClientId.trim(),
+        clientSecret: oauthSecret.trim(),
+        scope: oauthScope.trim() || undefined,
+        refreshToken: oauthRefreshToken.trim(),
+      };
+    }
     return null;
   };
 
@@ -263,21 +280,20 @@ export function TokenPanel({
     if (activeCredential?.id === id) clearCredential();
   };
 
-  const handleFetchOAuth = async (cred: Extract<Credential, { type: "oauth2cc" }>) => {
+  const handleFetchOAuth = async (
+    cred: Extract<Credential, { type: "oauth2cc" | "oauth2rt" }>
+  ) => {
     setFetchingToken(true);
     try {
-      const data = await fetchOAuthToken(cred);
-      const next = credentials.map((c) =>
-        c.id === cred.id
-          ? { ...c, accessToken: data.accessToken, expiresAt: data.expiresAt }
-          : c
-      );
+      const updated = await refreshCredential(specId, cred);
+      const next = credentials.map((c) => (c.id === cred.id ? updated : c));
       persist(next);
-      const updated = next.find((c) => c.id === cred.id) ?? null;
       if (getActiveCredentialId(specId) === cred.id) {
         onActiveChange(updated);
       }
-      toast.success("Token fetched");
+      toast.success(
+        cred.type === "oauth2rt" ? "Token refreshed" : "Token fetched"
+      );
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Failed to fetch token");
     } finally {
@@ -414,7 +430,7 @@ export function TokenPanel({
           />
         </>
       )}
-      {addType === "oauth2cc" && (
+      {(addType === "oauth2cc" || addType === "oauth2rt") && (
         <>
           <Label htmlFor="cred-add-oauth-url" className="text-xs">
             Token URL
@@ -457,6 +473,21 @@ export function TokenPanel({
             onChange={(e) => setOauthScope(e.target.value)}
             className="h-8 text-sm"
           />
+          {addType === "oauth2rt" && (
+            <>
+              <Label htmlFor="cred-add-oauth-refresh" className="text-xs">
+                Refresh token
+              </Label>
+              <Input
+                id="cred-add-oauth-refresh"
+                type="password"
+                placeholder="Refresh token"
+                value={oauthRefreshToken}
+                onChange={(e) => setOauthRefreshToken(e.target.value)}
+                className="h-8 text-sm font-mono"
+              />
+            </>
+          )}
         </>
       )}
       <Button size="sm" className="w-full h-8" onClick={addCredential}>
@@ -481,7 +512,7 @@ export function TokenPanel({
             <span className="text-muted-foreground ml-1">({cred.type})</span>
           </button>
           <div className="flex items-center gap-1 shrink-0">
-            {cred.type === "oauth2cc" && (
+            {(cred.type === "oauth2cc" || cred.type === "oauth2rt") && (
               <Button
                 variant="ghost"
                 size="sm"
@@ -542,7 +573,8 @@ export function TokenPanel({
         <KeyRound className="h-4 w-4 text-primary shrink-0 hidden sm:block" />
         {selector}
         {expiryBadge}
-        {activeCredential?.type === "oauth2cc" && (
+        {(activeCredential?.type === "oauth2cc" ||
+          activeCredential?.type === "oauth2rt") && (
           <Button
             variant="outline"
             size="sm"
@@ -591,7 +623,8 @@ export function TokenPanel({
             {activeCredential.name} · {activeCredential.type}
           </Badge>
           {expiryBadge}
-          {activeCredential.type === "oauth2cc" && (
+          {(activeCredential.type === "oauth2cc" ||
+            activeCredential.type === "oauth2rt") && (
             <Button
               variant="outline"
               size="sm"
@@ -602,7 +635,9 @@ export function TokenPanel({
               {fetchingToken ? (
                 <Loader2 className="h-3 w-3 motion-safe:animate-spin mr-1" />
               ) : null}
-              Fetch token
+              {activeCredential.type === "oauth2rt"
+                ? "Refresh token"
+                : "Fetch token"}
             </Button>
           )}
           <Button

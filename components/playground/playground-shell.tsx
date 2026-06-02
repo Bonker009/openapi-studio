@@ -6,8 +6,13 @@ import { EndpointList } from "@/components/playground/endpoint-list";
 import { TryItPanel } from "@/components/playground/try-it-panel";
 import {
   extractPlaygroundEndpoints,
+  type EndpointAuthRole,
   type PlaygroundEndpoint,
 } from "@/lib/playground/endpoints";
+import {
+  getEndpointAuthRoleOverrides,
+  withEndpointAuthRoles,
+} from "@/lib/playground/endpoint-auth-roles";
 import {
   credentialRequiresAuth,
   type Credential,
@@ -84,6 +89,11 @@ export function PlaygroundShell({
   const [activeCredential, setActiveCredential] = useState<Credential | null>(
     null
   );
+  const [authRoleOverrides, setAuthRoleOverrides] = useState<
+    Record<string, EndpointAuthRole>
+  >(() =>
+    typeof window !== "undefined" ? getEndpointAuthRoleOverrides(specId) : {}
+  );
   const [leftPanelWidth, setLeftPanelWidth] = useState(() =>
     loadLeftPanelWidth()
   );
@@ -95,13 +105,22 @@ export function PlaygroundShell({
   const isSplitResizable =
     splitContainerWidth >= LG_BREAKPOINT_PX && splitContainerWidth > 0;
 
+  useEffect(() => {
+    setAuthRoleOverrides(getEndpointAuthRoleOverrides(specId));
+  }, [specId]);
+
   const endpoints = useMemo(
     () =>
-      extractPlaygroundEndpoints({
-        paths: apiData.paths as Record<string, Record<string, unknown>> | undefined,
-        security: apiData.security,
-      }),
-    [apiData.paths, apiData.security]
+      withEndpointAuthRoles(
+        extractPlaygroundEndpoints({
+          paths: apiData.paths as
+            | Record<string, Record<string, unknown>>
+            | undefined,
+          security: apiData.security,
+        }),
+        authRoleOverrides
+      ),
+    [apiData.paths, apiData.security, authRoleOverrides]
   );
 
   useEffect(() => {
@@ -110,15 +129,11 @@ export function PlaygroundShell({
       return;
     }
     setSelected((prev) => {
-      if (
-        prev &&
-        endpoints.some(
-          (e) => e.method === prev.method && e.path === prev.path
-        )
-      ) {
-        return prev;
-      }
-      return endpoints[0];
+      if (!prev) return endpoints[0];
+      const match = endpoints.find(
+        (e) => e.method === prev.method && e.path === prev.path
+      );
+      return match ?? endpoints[0];
     });
   }, [endpoints]);
 
@@ -250,6 +265,8 @@ export function PlaygroundShell({
             selected={selected}
             onSelect={setSelected}
             authSatisfied={authSatisfied}
+            authRoleOverrides={authRoleOverrides}
+            onAuthRoleOverridesChange={setAuthRoleOverrides}
           />
         </div>
 
@@ -277,10 +294,12 @@ export function PlaygroundShell({
 
         <div className="flex-1 min-w-0 min-h-0 overflow-hidden bg-card flex flex-col">
           <TryItPanel
+            specId={specId}
             endpoint={selected}
             apiData={apiData}
             baseUrl={baseUrl}
             activeCredential={activeCredential}
+            onActiveCredentialChange={setActiveCredential}
             totalEndpoints={endpoints.length}
             onSelectFirst={selectFirst}
           />

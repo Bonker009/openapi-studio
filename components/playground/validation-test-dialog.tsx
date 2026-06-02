@@ -4,7 +4,9 @@ import { useCallback, useMemo, useRef, useState, useEffect } from "react";
 import {
   CheckCircle2,
   Copy,
+  Download,
   KeyRound,
+  Loader2,
   ShieldCheck,
   Settings2,
   XCircle,
@@ -48,6 +50,12 @@ import {
 } from "@/components/playground/validation-results-panel";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import {
   credentialRequiresAuth,
   type Credential,
 } from "@/lib/playground/credentials";
@@ -62,6 +70,8 @@ import {
 import { estimateValidationCaseCount } from "@/lib/validation/case-builder";
 import { runValidationSuite } from "@/lib/validation/suite-runner";
 import { validationAggregate } from "@/lib/validation/aggregate";
+import { exportValidationResultsToExcel } from "@/lib/validation/export-results";
+import { toast } from "sonner";
 import { runValidationCase } from "@/lib/validation/case-runner";
 import { buildEndpointValidationSuite } from "@/lib/validation/case-builder";
 import { suggestOverrideKeysForEndpoint } from "@/lib/validation/overrides";
@@ -146,8 +156,77 @@ function authLabel(credential: Credential | null): {
         variant: "secondary",
       };
     case "oauth2cc":
-      return { text: `Auth: OAuth2 · ${credential.name}`, variant: "secondary" };
+      return {
+        text: `Auth: OAuth2 (client credentials) · ${credential.name}`,
+        variant: "secondary",
+      };
+    case "oauth2rt":
+      return {
+        text: `Auth: OAuth2 (refresh token) · ${credential.name}`,
+        variant: "secondary",
+      };
   }
+}
+
+function ValidationExportMenu({
+  results,
+  specId,
+  disabled,
+}: {
+  results: ValidationResult[];
+  specId: string;
+  disabled?: boolean;
+}) {
+  const [exporting, setExporting] = useState(false);
+
+  const handleCopyJson = async () => {
+    await navigator.clipboard.writeText(JSON.stringify(results, null, 2));
+    toast.success("Results copied as JSON");
+  };
+
+  const handleDownloadExcel = async () => {
+    setExporting(true);
+    const toastId = toast.loading("Building Excel workbook…");
+    try {
+      await exportValidationResultsToExcel(specId, results);
+      toast.success("Excel file downloaded", { id: toastId });
+    } catch (e) {
+      toast.error(
+        e instanceof Error ? e.message : "Failed to export Excel",
+        { id: toastId }
+      );
+    } finally {
+      setExporting(false);
+    }
+  };
+
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <Button type="button" variant="outline" size="sm" disabled={disabled || exporting}>
+          {exporting ? (
+            <Loader2 className="size-4 mr-1.5 motion-safe:animate-spin" aria-hidden />
+          ) : (
+            <Download className="size-4 mr-1.5" aria-hidden />
+          )}
+          Export
+        </Button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end">
+        <DropdownMenuItem onClick={() => void handleCopyJson()}>
+          <Copy className="size-4 mr-2" aria-hidden />
+          Copy JSON
+        </DropdownMenuItem>
+        <DropdownMenuItem
+          onClick={() => void handleDownloadExcel()}
+          disabled={exporting}
+        >
+          <Download className="size-4 mr-2" aria-hidden />
+          Download Excel
+        </DropdownMenuItem>
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
 }
 
 function ValidationAuthChip({ credential }: { credential: Credential | null }) {
@@ -435,6 +514,7 @@ export function ValidationTestDialog({
 
     try {
       const summary = await runValidationSuite({
+        specId,
         endpoints: targetEndpoints,
         baseUrl,
         credential,
@@ -465,7 +545,7 @@ export function ValidationTestDialog({
       setRunning(false);
       abortRef.current = null;
     }
-  }, [targetEndpoints, baseUrl, credential, apiData, store, config]);
+  }, [targetEndpoints, baseUrl, credential, apiData, store, config, specId]);
 
   const stop = useCallback(() => abortRef.current?.abort(), []);
 
@@ -477,6 +557,7 @@ export function ValidationTestDialog({
       const testCase = suite.cases.find((c) => c.id === r.caseId);
       if (!testCase) return;
       const one = await runValidationCase(testCase, {
+        specId,
         baseUrl,
         credential,
         endpoint: ep,
@@ -491,7 +572,7 @@ export function ValidationTestDialog({
         return next;
       });
     },
-    [apiData, store, config, baseUrl, credential]
+    [apiData, store, config, baseUrl, credential, specId]
   );
 
   return (
@@ -763,20 +844,12 @@ export function ValidationTestDialog({
                   />
                 </div>
               )}
-              <div className="shrink-0 border-t px-6 py-3 bg-background">
-                <Button
-                  variant="outline"
-                  size="sm"
+              <div className="shrink-0 border-t px-6 py-3 bg-background flex items-center justify-end gap-2">
+                <ValidationExportMenu
+                  results={results}
+                  specId={specId}
                   disabled={results.length === 0}
-                  onClick={() =>
-                    void navigator.clipboard.writeText(
-                      JSON.stringify(results, null, 2)
-                    )
-                  }
-                >
-                  <Copy className="size-4 mr-1.5" />
-                  Copy results (JSON)
-                </Button>
+                />
               </div>
             </TabsContent>
           </Tabs>

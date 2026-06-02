@@ -44,6 +44,11 @@ import {
   credentialRequiresAuth,
   type Credential,
 } from "@/lib/playground/credentials";
+import {
+  clearPlaygroundRequestBody,
+  getPlaygroundRequestBodies,
+  setPlaygroundRequestBody,
+} from "@/lib/playground/storage";
 import { assertPlaygroundRequestUrl } from "@/lib/playground/url-policy";
 import {
   buildRequestUrl,
@@ -73,13 +78,18 @@ import {
   generateOpenApiSample,
   getOperationSamples,
 } from "@/lib/playground/generate-sample";
+import { endpointKey as buildEndpointKey } from "@/shared/utils/endpoint-key";
+import { playgroundAuthApplies } from "@/lib/playground/endpoint-auth-roles";
+import { ensureFreshCredential } from "@/lib/playground/token-lifecycle";
 import { toast } from "sonner";
 
 type TryItPanelProps = {
+  specId: string;
   endpoint: PlaygroundEndpoint | null;
   apiData: { paths?: Record<string, unknown>; components?: unknown };
   baseUrl: string;
   activeCredential: Credential | null;
+  onActiveCredentialChange?: (credential: Credential | null) => void;
   totalEndpoints?: number;
   onSelectFirst?: () => void;
 };
@@ -91,10 +101,12 @@ function defaultPlaceholder(p: OpenApiParameter): string {
 }
 
 export function TryItPanel({
+  specId,
   endpoint,
   apiData,
   baseUrl,
   activeCredential,
+  onActiveCredentialChange,
   totalEndpoints = 0,
   onSelectFirst,
 }: TryItPanelProps) {
@@ -119,6 +131,9 @@ export function TryItPanel({
   const [headersSectionOpen, setHeadersSectionOpen] = useState(false);
   const [bodySectionOpen, setBodySectionOpen] = useState(true);
   const skipOriginPreserveRef = useRef(false);
+  const persistRequestBodyTimerRef = useRef<ReturnType<typeof setTimeout> | null>(
+    null
+  );
 
   const methodData = useMemo(() => {
     if (!endpoint || !apiData.paths) return null;
@@ -153,6 +168,14 @@ export function TryItPanel({
     setHeadersSectionOpen(false);
     setBodySectionOpen(Boolean(endpoint?.hasRequestBody));
   }, [endpoint, queryParams.length]);
+
+  useEffect(() => {
+    return () => {
+      if (persistRequestBodyTimerRef.current) {
+        clearTimeout(persistRequestBodyTimerRef.current);
+      }
+    };
+  }, []);
 
   const resetMultipartBody = useCallback(() => {
     setMultipartState(
@@ -214,9 +237,42 @@ export function TryItPanel({
     setResponseTime(null);
     setResponseBody("");
     setResponseHeaders({});
-    resetSampleBody();
+    if (endpoint.hasRequestBody && bodyKind === "json") {
+      const key = buildEndpointKey(endpoint.method, endpoint.path);
+      const savedBody = getPlaygroundRequestBodies(specId)[key];
+      if (typeof savedBody === "string") {
+        setRequestBody(savedBody);
+      } else {
+        resetSampleBody();
+      }
+    } else {
+      resetSampleBody();
+    }
     setActiveTab("request");
-  }, [endpoint, methodData, headerParams, resetSampleBody]);
+  }, [endpoint, headerParams, resetSampleBody, bodyKind, specId]);
+
+  useEffect(() => {
+    if (!endpoint || !endpoint.hasRequestBody || bodyKind !== "json") return;
+    if (persistRequestBodyTimerRef.current) {
+      clearTimeout(persistRequestBodyTimerRef.current);
+    }
+    const key = buildEndpointKey(endpoint.method, endpoint.path);
+    persistRequestBodyTimerRef.current = setTimeout(() => {
+      setPlaygroundRequestBody(specId, key, requestBody);
+    }, 300);
+    return () => {
+      if (persistRequestBodyTimerRef.current) {
+        clearTimeout(persistRequestBodyTimerRef.current);
+      }
+    };
+  }, [
+    specId,
+    endpoint?.method,
+    endpoint?.path,
+    endpoint?.hasRequestBody,
+    bodyKind,
+    requestBody,
+  ]);
 
   const syncRequestUrlFromParams = useCallback(() => {
     if (!endpoint) return;
@@ -271,7 +327,7 @@ export function TryItPanel({
       const v = headerValues[p.name]?.trim();
       if (v) headers[p.name] = v;
     });
-    if (endpoint?.requiresAuth) {
+    if (endpoint && playgroundAuthApplies(endpoint.authRole)) {
       Object.assign(headers, authHeadersForCurl(activeCredential));
     }
     return headers;
@@ -298,7 +354,10 @@ export function TryItPanel({
   const curlCommand = useMemo(() => {
     if (!endpoint) return "";
     let url = requestUrl;
-    const q = authQueryForUrl(activeCredential, endpoint.requiresAuth);
+    const q = authQueryForUrl(
+      activeCredential,
+      playgroundAuthApplies(endpoint.authRole)
+    );
     for (const [k, v] of Object.entries(q)) {
       try {
         const u = new URL(url);
@@ -370,11 +429,20 @@ export function TryItPanel({
       }
     }
 
+    let credential = activeCredential;
+    if (credential) {
+      const fresh = await ensureFreshCredential(specId, credential);
+      credential = fresh.credential;
+      if (fresh.refreshed && credential) {
+        onActiveCredentialChange?.(credential);
+      }
+    }
+
     const authed = applyAuthToRequest(
-      activeCredential,
+      credential,
       requestUrl,
       options,
-      endpoint.requiresAuth
+      playgroundAuthApplies(endpoint.authRole)
     );
 
     try {
@@ -457,6 +525,14 @@ export function TryItPanel({
     if (formatted) setRequestBody(formatted);
     else toast.error("Invalid JSON");
   };
+
+  const resetJsonBodyToSample = useCallback(() => {
+    if (endpoint) {
+      const key = buildEndpointKey(endpoint.method, endpoint.path);
+      clearPlaygroundRequestBody(specId, key);
+    }
+    resetSampleBody();
+  }, [endpoint, specId, resetSampleBody]);
 
   const renderParamField = (p: OpenApiParameter) => {
     const value =
@@ -560,8 +636,9 @@ export function TryItPanel({
     );
   }
 
+  const needsPlaygroundAuth = playgroundAuthApplies(endpoint.authRole);
   const authWarning =
-    endpoint.requiresAuth && !credentialRequiresAuth(activeCredential);
+    needsPlaygroundAuth && !credentialRequiresAuth(activeCredential);
   const authSatisfied = credentialRequiresAuth(activeCredential);
 
   return (
@@ -589,7 +666,7 @@ export function TryItPanel({
               {operationLabel}
             </span>
           )}
-          {endpoint.requiresAuth &&
+          {needsPlaygroundAuth &&
             (authSatisfied ? (
               <LockOpen
                 className="h-3.5 w-3.5 shrink-0 text-success"
@@ -804,7 +881,7 @@ export function TryItPanel({
                               variant="outline"
                               size="sm"
                               className="h-7 text-xs gap-1"
-                              onClick={resetSampleBody}
+                              onClick={resetJsonBodyToSample}
                             >
                               <RotateCcw className="h-3.5 w-3.5" />
                               Reset to sample

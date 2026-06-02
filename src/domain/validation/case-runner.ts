@@ -8,6 +8,7 @@ import {
   parseJsonValue,
 } from "@/lib/playground/json-format";
 import { classifyOutcome } from "@/src/domain/validation/pass-policy";
+import { ensureFreshCredential } from "@/lib/playground/token-lifecycle";
 import type {
   PassPolicy,
   ValidationCase,
@@ -59,6 +60,7 @@ function buildRequestPreview(
 export async function runValidationCase(
   testCase: ValidationCase,
   opts: {
+    specId?: string;
     baseUrl: string;
     credential: Credential | null;
     endpoint: PlaygroundEndpoint;
@@ -118,12 +120,17 @@ export async function runValidationCase(
     init.body = JSON.stringify(testCase.body);
   }
 
-  const authed = applyAuthToRequest(
-    opts.credential,
-    url,
-    init,
-    opts.endpoint.requiresAuth
-  );
+  let credential = opts.credential;
+  if (opts.specId && credential) {
+    const fresh = await ensureFreshCredential(opts.specId, credential);
+    credential = fresh.credential;
+  }
+
+  const applyAuth =
+    (opts.endpoint.authRole ?? (opts.endpoint.requiresAuth ? "protected" : "none")) ===
+    "protected";
+
+  const authed = applyAuthToRequest(credential, url, init, applyAuth);
   url = authed.url;
   const finalInit = authed.init;
 

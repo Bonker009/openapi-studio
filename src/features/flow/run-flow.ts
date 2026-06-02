@@ -11,6 +11,7 @@ import type { FlowCredential } from "@/domain/flows/requests/credential-resolver
 import type { FlowEndpointDescriptor } from "@/domain/flows/requests/request-port";
 import { createPlaygroundRequestPort } from "@/infrastructure/flows/playground-request-port";
 import type { Credential } from "@/lib/playground/credentials";
+import { ensureFreshCredential } from "@/lib/playground/token-lifecycle";
 import type { PlaygroundEndpoint } from "@/lib/playground/endpoints";
 import type { HttpRequestResult } from "@/lib/playground/http-request-core";
 
@@ -28,6 +29,8 @@ export type RunFlowOptions = Omit<
   defaultCredential: Credential | null;
   execute: FlowExecutor;
   requestPort?: FlowRequestPort;
+  specId?: string;
+  onCredentialRefresh?: (credential: Credential) => void;
 };
 
 function mapEndpoint(ep: PlaygroundEndpoint): FlowEndpointDescriptor {
@@ -36,6 +39,7 @@ function mapEndpoint(ep: PlaygroundEndpoint): FlowEndpointDescriptor {
     path: ep.path,
     parameters: ep.parameters,
     requiresAuth: ep.requiresAuth,
+    authRole: ep.authRole,
   };
 }
 
@@ -57,6 +61,26 @@ const domainExecutor =
   };
 
 export async function runFlow(opts: RunFlowOptions) {
+  const prepareStep = opts.specId
+    ? async (state: {
+        credentials: FlowCredential[];
+        defaultCredential: FlowCredential | null;
+      }) => {
+        const current = opts.credentials.find(
+          (c) => c.id === state.defaultCredential?.id
+        );
+        if (!current) return;
+        const fresh = await ensureFreshCredential(opts.specId!, current);
+        if (!fresh.refreshed || !fresh.credential) return;
+        const mapped = mapCredential(fresh.credential);
+        state.defaultCredential = mapped;
+        state.credentials = state.credentials.map((c) =>
+          c.id === mapped.id ? mapped : c
+        );
+        opts.onCredentialRefresh?.(fresh.credential);
+      }
+    : undefined;
+
   return runFlowEngine({
     flow: opts.flow,
     baseUrl: opts.baseUrl,
@@ -67,6 +91,7 @@ export async function runFlow(opts: RunFlowOptions) {
     priorResults: opts.priorResults,
     stepThrough: opts.stepThrough,
     onPause: opts.onPause,
+    prepareStep,
     requestPort: opts.requestPort ?? createPlaygroundRequestPort(),
     endpoints: opts.endpoints.map(mapEndpoint),
     credentials: opts.credentials.map(mapCredential),

@@ -23,6 +23,14 @@ export type RunFlowOptions = {
   priorResults?: StepRunResult[];
   stepThrough?: boolean;
   onPause?: PauseHandler;
+  /**
+   * Called before each step builds its HTTP request (e.g. proactive token refresh).
+   * Mutate `credentials` / `defaultCredential` on the state object to affect the step.
+   */
+  prepareStep?: (state: {
+    credentials: FlowCredential[];
+    defaultCredential: FlowCredential | null;
+  }) => Promise<void>;
 };
 
 export function resolveEnvironmentRecord(

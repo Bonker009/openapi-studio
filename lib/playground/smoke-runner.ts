@@ -14,6 +14,8 @@ import {
 import { getRequestBodySchema } from "@/lib/openapi-schema";
 import { formatResponseBodyForDisplay } from "@/lib/playground/json-format";
 import type { HttpRequestResult } from "@/lib/playground/perform-http-request";
+import { ensureFreshCredential } from "@/lib/playground/token-lifecycle";
+import { playgroundAuthApplies } from "@/lib/playground/endpoint-auth-roles";
 
 const BODY_PREVIEW_MAX = 4096;
 
@@ -44,6 +46,7 @@ function captureResponsePreview(res: HttpRequestResult): string | undefined {
 }
 
 type SmokeRunnerOptions = {
+  specId?: string;
   endpoints: PlaygroundEndpoint[];
   baseUrl: string;
   credential: Credential | null;
@@ -185,11 +188,17 @@ export async function smokeOneEndpoint(
     }
   }
 
+  let credential = opts.credential;
+  if (opts.specId && credential) {
+    const fresh = await ensureFreshCredential(opts.specId, credential);
+    credential = fresh.credential;
+  }
+
   const authed = applyAuthToRequest(
-    opts.credential,
+    credential,
     url,
     init,
-    endpoint.requiresAuth
+    playgroundAuthApplies(endpoint.authRole)
   );
   url = authed.url;
   init = authed.init;

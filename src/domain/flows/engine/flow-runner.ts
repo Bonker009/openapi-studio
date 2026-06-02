@@ -61,14 +61,30 @@ export class FlowRunner {
     const startIndex = opts.startIndex ?? 0;
     let aborted = false;
 
+    const credentialState = {
+      credentials: opts.credentials,
+      defaultCredential: opts.defaultCredential,
+    };
+
     const executorOpts: StepExecutorOptions = {
       flow: opts.flow,
       endpoints: opts.endpoints,
       baseUrl: opts.baseUrl,
-      credentials: opts.credentials,
-      defaultCredential: opts.defaultCredential,
+      get credentials() {
+        return credentialState.credentials;
+      },
+      get defaultCredential() {
+        return credentialState.defaultCredential;
+      },
       requestPort: opts.requestPort,
       execute: opts.execute,
+      prepareStep: opts.prepareStep
+        ? async (state) => {
+            await opts.prepareStep!(credentialState);
+            state.credentials = credentialState.credentials;
+            state.defaultCredential = credentialState.defaultCredential;
+          }
+        : undefined,
     };
 
     for (let i = 0; i < opts.flow.steps.length; i++) {

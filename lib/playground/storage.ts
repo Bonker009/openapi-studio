@@ -70,6 +70,35 @@ export function setActiveToken(specId: string, name: string | null): void {
   }
 }
 
+export function getPlaygroundRequestBodies(
+  specId: string
+): Record<string, string> {
+  return safeGet<Record<string, string>>(prefix(specId, "request_bodies")) ?? {};
+}
+
+export function setPlaygroundRequestBody(
+  specId: string,
+  endpointKey: string,
+  body: string
+): void {
+  const current = getPlaygroundRequestBodies(specId);
+  safeSet(prefix(specId, "request_bodies"), {
+    ...current,
+    [endpointKey]: body,
+  });
+}
+
+export function clearPlaygroundRequestBody(
+  specId: string,
+  endpointKey: string
+): void {
+  const current = getPlaygroundRequestBodies(specId);
+  if (!(endpointKey in current)) return;
+  const next = { ...current };
+  delete next[endpointKey];
+  safeSet(prefix(specId, "request_bodies"), next);
+}
+
 export type StoredValidationConfig = {
   concurrency: number;
   passPolicyKind: "4xx" | "strict-400" | "4xx-or-422" | "custom-range";

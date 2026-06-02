@@ -45,6 +45,7 @@ export async function runValidationSuite(
       for (const testCase of suite.cases) {
         if (opts.signal?.aborted) return;
         const result = await runValidationCase(testCase, {
+          specId: opts.specId,
           baseUrl: opts.baseUrl,
           credential: opts.credential,
           endpoint: suite.endpoint,

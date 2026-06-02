@@ -1,4 +1,5 @@
 import type { Flow, FlowStep, RunContext } from "@/domain/flows/types";
+import type { EndpointAuthRole } from "@/src/domain/openapi/endpoints";
 
 /** Minimal endpoint descriptor for request building (no playground imports). */
 export type FlowEndpointDescriptor = {
@@ -11,6 +12,7 @@ export type FlowEndpointDescriptor = {
     schema?: { type?: string; format?: string; enum?: string[]; default?: unknown };
   }>;
   requiresAuth: boolean;
+  authRole?: EndpointAuthRole;
 };
 
 export type BuiltStepRequest = {

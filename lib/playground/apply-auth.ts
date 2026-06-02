@@ -64,7 +64,8 @@ export function applyAuthToRequest(
         init: mergeHeaders(init, { [credential.paramName]: value }),
       };
     }
-    case "oauth2cc": {
+    case "oauth2cc":
+    case "oauth2rt": {
       const token = credential.accessToken?.trim();
       if (!token) return { url, init };
       return {
@@ -102,7 +103,8 @@ export function authHeadersForCurl(
       }
       return {};
     }
-    case "oauth2cc": {
+    case "oauth2cc":
+    case "oauth2rt": {
       const token = credential.accessToken?.trim();
       return token ? { Authorization: `Bearer ${token}` } : {};
     }

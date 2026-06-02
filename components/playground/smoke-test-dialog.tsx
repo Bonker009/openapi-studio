@@ -414,12 +414,13 @@ export function SmokeTestDialog({
 
   const runnerOpts = useMemo(
     () => ({
+      specId,
       endpoints: targetEndpoints,
       baseUrl,
       credential,
       apiData,
     }),
-    [targetEndpoints, baseUrl, credential, apiData]
+    [specId, targetEndpoints, baseUrl, credential, apiData]
   );
 
   const endpointByKey = useMemo(() => {

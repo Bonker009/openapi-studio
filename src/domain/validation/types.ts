@@ -97,6 +97,7 @@ export const DEFAULT_VALIDATION_CONFIG: ValidationSuiteConfig = {
 };
 
 export type ValidationSuiteOptions = {
+  specId?: string;
   endpoints: PlaygroundEndpoint[];
   baseUrl: string;
   credential: Credential | null;

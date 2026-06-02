@@ -356,6 +356,8 @@ export function FlowShell({
         baseUrl,
         credentials,
         defaultCredential: activeCredential,
+        specId,
+        onCredentialRefresh: setActiveCredential,
         execute: executePlaygroundRequest,
         signal: ac.signal,
         stepThrough,

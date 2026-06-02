@@ -1,19 +1,27 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Lock, LockOpen, Search } from "lucide-react";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
+import { KeyRound, Lock, LockOpen, RefreshCw, Search } from "lucide-react";
+import { Button } from "@/components/ui/button";
 import {
-  Tooltip,
-  TooltipContent,
-  TooltipTrigger,
-} from "@/components/ui/tooltip";
-import { MethodBadge } from "@/components/method-badge";
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import {
+  setEndpointAuthRoleOverride,
+} from "@/lib/playground/endpoint-auth-roles";
 import {
   groupEndpointsByController,
+  type EndpointAuthRole,
   type PlaygroundEndpoint,
 } from "@/lib/playground/endpoints";
+import { endpointKey } from "@/shared/utils/endpoint-key";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { MethodBadge } from "@/components/method-badge";
 import { cn } from "@/lib/utils";
 
 const METHOD_MIN = 56;
@@ -52,35 +60,106 @@ function saveMethodWidth(specId: string, method: number) {
   }
 }
 
-function EndpointAuthIcon({
-  requiresAuth,
+const AUTH_ROLE_OPTIONS: {
+  value: EndpointAuthRole | "auto";
+  label: string;
+}[] = [
+  { value: "auto", label: "Auto (from spec)" },
+  { value: "none", label: "None" },
+  { value: "login", label: "Login" },
+  { value: "refresh", label: "Refresh" },
+  { value: "protected", label: "Protected" },
+];
+
+function EndpointAuthRoleControl({
+  specId,
+  endpoint,
+  authRoleOverrides,
+  onAuthRoleOverridesChange,
   authSatisfied,
 }: {
-  requiresAuth: boolean;
+  specId: string;
+  endpoint: PlaygroundEndpoint;
+  authRoleOverrides: Record<string, EndpointAuthRole>;
+  onAuthRoleOverridesChange: (next: Record<string, EndpointAuthRole>) => void;
   authSatisfied: boolean;
 }) {
-  if (!requiresAuth) return null;
-  const satisfied = authSatisfied;
-  const Icon = satisfied ? LockOpen : Lock;
+  const key = endpointKey(endpoint.method, endpoint.path);
+  const override = authRoleOverrides[key];
+  const role = endpoint.authRole ?? "none";
+  const defaultRole: EndpointAuthRole = endpoint.requiresAuth
+    ? "protected"
+    : "none";
+
+  const pickRole = (value: EndpointAuthRole | "auto") => {
+    const next = setEndpointAuthRoleOverride(
+      specId,
+      key,
+      value === "auto" ? null : value
+    );
+    onAuthRoleOverridesChange(next);
+  };
+
+  const RoleIcon =
+    role === "login"
+      ? KeyRound
+      : role === "refresh"
+        ? RefreshCw
+        : role === "protected"
+          ? authSatisfied
+            ? LockOpen
+            : Lock
+          : null;
+
   return (
-    <Tooltip>
-      <TooltipTrigger asChild>
-        <span className="inline-flex shrink-0 items-center justify-center">
-          <Icon
-            className={cn(
-              "h-3.5 w-3.5",
-              satisfied ? "text-success" : "text-muted-foreground"
-            )}
-            aria-hidden
-          />
-        </span>
-      </TooltipTrigger>
-      <TooltipContent side="left">
-        {satisfied
-          ? "Authentication applied"
-          : "Requires authentication"}
-      </TooltipContent>
-    </Tooltip>
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <Button
+          type="button"
+          variant="ghost"
+          size="icon"
+          className="h-6 w-6 shrink-0"
+          aria-label={`Auth role: ${role}${override ? " (override)" : ""}`}
+          onClick={(e) => e.stopPropagation()}
+          onPointerDown={(e) => e.stopPropagation()}
+        >
+          {RoleIcon ? (
+            <RoleIcon
+              className={cn(
+                "h-3.5 w-3.5",
+                role === "protected" && authSatisfied && "text-success",
+                role === "protected" && !authSatisfied && "text-muted-foreground",
+                (role === "login" || role === "refresh") && "text-primary"
+              )}
+            />
+          ) : (
+            <span className="text-[10px] text-muted-foreground">—</span>
+          )}
+        </Button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end" className="w-44">
+        <DropdownMenuLabel className="text-xs">Auth role</DropdownMenuLabel>
+        {AUTH_ROLE_OPTIONS.map((opt) => (
+          <DropdownMenuItem
+            key={opt.value}
+            className="text-xs"
+            onClick={(e) => {
+              e.stopPropagation();
+              pickRole(opt.value);
+            }}
+          >
+            {opt.label}
+            {opt.value === "auto"
+              ? !override
+                ? " ✓"
+                : ""
+              : (override ?? defaultRole) === opt.value
+                ? " ✓"
+                : ""}
+          </DropdownMenuItem>
+        ))}
+      </DropdownMenuContent>
+    </DropdownMenu>
   );
 }
 
@@ -90,6 +169,8 @@ type EndpointListProps = {
   selected: PlaygroundEndpoint | null;
   onSelect: (endpoint: PlaygroundEndpoint) => void;
   authSatisfied: boolean;
+  authRoleOverrides: Record<string, EndpointAuthRole>;
+  onAuthRoleOverridesChange: (next: Record<string, EndpointAuthRole>) => void;
 };
 
 export function EndpointList({
@@ -98,6 +179,8 @@ export function EndpointList({
   selected,
   onSelect,
   authSatisfied,
+  authRoleOverrides,
+  onAuthRoleOverridesChange,
 }: EndpointListProps) {
   const [search, setSearch] = useState("");
   const [methodWidth, setMethodWidth] = useState(() =>
@@ -341,8 +424,13 @@ export function EndpointList({
                                 </span>
                               )}
                             </div>
-                            <EndpointAuthIcon
-                              requiresAuth={ep.requiresAuth}
+                            <EndpointAuthRoleControl
+                              specId={specId}
+                              endpoint={ep}
+                              authRoleOverrides={authRoleOverrides}
+                              onAuthRoleOverridesChange={
+                                onAuthRoleOverridesChange
+                              }
                               authSatisfied={authSatisfied}
                             />
                           </div>
@@ -381,8 +469,13 @@ export function EndpointList({
                           )}
                         </div>
                         <div className="flex items-start justify-center pt-0.5">
-                          <EndpointAuthIcon
-                            requiresAuth={ep.requiresAuth}
+                          <EndpointAuthRoleControl
+                            specId={specId}
+                            endpoint={ep}
+                            authRoleOverrides={authRoleOverrides}
+                            onAuthRoleOverridesChange={
+                              onAuthRoleOverridesChange
+                            }
                             authSatisfied={authSatisfied}
                           />
                         </div>

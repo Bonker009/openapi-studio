@@ -8,6 +8,7 @@ import type {
 } from "@/domain/flows/requests/request-port";
 import type { FlowCredential } from "@/domain/flows/requests/credential-resolver";
 import { resolveFlowCredential } from "@/domain/flows/requests/credential-resolver";
+import { playgroundAuthApplies } from "@/lib/playground/endpoint-auth-roles";
 
 function safeParse(text: string): unknown {
   try {
@@ -65,11 +66,15 @@ export function createPlaygroundRequestPort(): FlowRequestPort {
         init.body = step.body;
       }
 
+      const requiresAuth = endpoint.authRole
+        ? playgroundAuthApplies(endpoint.authRole)
+        : endpoint.requiresAuth;
+
       const authed = applyAuthToRequest(
         toPlaygroundCredential(role.credential),
         url,
         init,
-        endpoint.requiresAuth
+        requiresAuth
       );
       url = authed.url;
 
