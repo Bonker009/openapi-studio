@@ -7,9 +7,28 @@ import { streamOpenApiQuestion } from "@/domain/ai/pipeline/answer-question-stre
 import { parseChatSelectionFromBody } from "@/lib/ai/chat-selection";
 import { guardAiRoute, readAiJsonBody } from "@/lib/ai/route-helpers";
 import { validateSpecId } from "@/lib/spec-id";
+import type { QAHistoryMessage } from "@/domain/ai/types";
 
 function sseEncode(event: string, data: Record<string, unknown>): string {
   return `event: ${event}\ndata: ${JSON.stringify(data)}\n\n`;
+}
+
+
+function sanitizeHistory(input: unknown): QAHistoryMessage[] {
+  if (!Array.isArray(input)) return [];
+  const out: QAHistoryMessage[] = [];
+  for (const item of input.slice(-12)) {
+    if (!item || typeof item !== "object") continue;
+    const role = (item as { role?: unknown }).role;
+    const content = (item as { content?: unknown }).content;
+    if ((role !== "user" && role !== "assistant") || typeof content !== "string") {
+      continue;
+    }
+    const text = content.trim().slice(0, 1500);
+    if (!text) continue;
+    out.push({ role, content: text });
+  }
+  return out;
 }
 
 export async function POST(request: NextRequest) {
@@ -25,6 +44,7 @@ export async function POST(request: NextRequest) {
     chatModel?: string;
     provider?: string;
     model?: string;
+    history?: unknown;
   }>(request);
   if (body instanceof NextResponse) return body;
 
@@ -58,12 +78,15 @@ export async function POST(request: NextRequest) {
     );
   }
 
+  const history = sanitizeHistory(body.history);
+
   const qaBase = {
     specId,
     question: question.slice(0, 4000),
     conversationId: body.conversationId,
     chatProvider: chatSelection?.provider,
     chatModel: chatSelection?.model,
+    history,
   };
 
   if (body.stream) {

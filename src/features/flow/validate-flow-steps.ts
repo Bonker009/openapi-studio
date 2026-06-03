@@ -74,6 +74,26 @@ export function validateFlowSteps(
   const steps = flow.steps;
 
   steps.forEach((step, stepIndex) => {
+    if (step.stepKind === "conditional") {
+      if (!step.conditional?.left?.trim()) {
+        issues.push({
+          stepIndex,
+          message: `Step ${stepIndex + 1}: conditional left value is required`,
+        });
+      }
+      const outgoing =
+        (flow.connections ?? []).filter((c) => c.source === step.id) ?? [];
+      const trueCount = outgoing.filter((c) => (c.kind ?? "seq") === "true").length;
+      const falseCount = outgoing.filter((c) => (c.kind ?? "seq") === "false").length;
+      if (trueCount !== 1 || falseCount !== 1) {
+        issues.push({
+          stepIndex,
+          message: `Step ${stepIndex + 1}: conditional step should have one true and one false connection`,
+        });
+      }
+      return;
+    }
+
     const endpoint = endpoints.find((e) => flowEndpointKey(e) === step.endpointKey);
     if (!endpoint) {
       issues.push({

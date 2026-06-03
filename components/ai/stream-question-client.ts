@@ -19,6 +19,11 @@ export type StreamQuestionChatSelection = {
   model: string;
 };
 
+export type StreamQuestionHistoryMessage = {
+  role: "user" | "assistant";
+  content: string;
+};
+
 export async function streamQuestionRequest(
   input: {
     specId: string;
@@ -26,6 +31,7 @@ export async function streamQuestionRequest(
     conversationId?: string;
     chatProvider?: "openai" | "groq";
     chatModel?: string;
+    history?: StreamQuestionHistoryMessage[];
     signal?: AbortSignal;
   },
   callbacks: StreamQuestionCallbacks
@@ -42,6 +48,7 @@ export async function streamQuestionRequest(
         stream: true,
         chatProvider: input.chatProvider,
         chatModel: input.chatModel,
+        history: input.history,
       }),
       signal: input.signal,
     });

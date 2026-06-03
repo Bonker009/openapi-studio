@@ -103,7 +103,11 @@ export type FlowDefinition = {
   executionMode?: FlowExecutionMode;
   steps: DeclarativeStep[];
   onStepFailure?: "stop" | "continue";
-  connections?: { source: string; target: string }[];
+  connections?: {
+    source: string;
+    target: string;
+    kind?: "seq" | "true" | "false";
+  }[];
   diagramPositions?: Record<string, { x: number; y: number }>;
   auth?: {
     loginStepId: string;

@@ -101,6 +101,7 @@ export class OpenAiDocumentationAssistant implements AIDocumentationAssistant {
       question: input.question,
       allowedEndpoints: input.allowedEndpoints,
       contextBlocks: input.contextBlocks,
+      history: input.history,
     });
     const parsed = await withAiRetry(() =>
       responsesJson<{ answer: string; citedEndpoints: string[] }>({

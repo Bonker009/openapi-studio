@@ -61,6 +61,7 @@ function mapStepToInsert(flowDbId: string, step: FlowStep, orderIndex: number) {
       credentialName: step.credentialName ?? null,
     },
     stepConfig: {
+      stepKind: step.stepKind ?? "request",
       endpointKey: step.endpointKey,
       paramValues: step.paramValues ?? {},
       headerValues: step.headerValues ?? {},
@@ -71,6 +72,7 @@ function mapStepToInsert(flowDbId: string, step: FlowStep, orderIndex: number) {
       retry: step.retry ?? null,
       ui: step.ui ?? null,
       condition: step.condition ?? null,
+      conditional: step.conditional ?? null,
     },
     orderIndex,
   };
@@ -93,6 +95,7 @@ function mapStepRowToDomain(step: StepRow): FlowStep {
   return {
     id: step.stepKey,
     name: step.name,
+    stepKind: cfg.stepKind === "conditional" ? "conditional" : "request",
     endpointKey:
       typeof cfg.endpointKey === "string"
         ? cfg.endpointKey
@@ -122,6 +125,10 @@ function mapStepRowToDomain(step: StepRow): FlowStep {
         ? (cfg.ui as NonNullable<FlowStep["ui"]>)
         : undefined,
     condition: typeof cfg.condition === "string" ? cfg.condition : undefined,
+    conditional:
+      cfg.conditional && typeof cfg.conditional === "object"
+        ? (cfg.conditional as FlowStep["conditional"])
+        : undefined,
   };
 }
 
@@ -149,6 +156,7 @@ function mapFlowRowsToDomain(
     connections: (config.connections as Flow["connections"]) ?? undefined,
     diagramPositions:
       (config.diagramPositions as Flow["diagramPositions"]) ?? undefined,
+    sections: (config.sections as Flow["sections"]) ?? [],
     createdAt: flow.createdAt.getTime(),
     updatedAt: flow.updatedAt.getTime(),
   };
@@ -291,6 +299,7 @@ export class PostgresFlowRepository implements FlowRepository {
             onStepFailure: normalized.onStepFailure,
             connections: normalized.connections ?? null,
             diagramPositions: normalized.diagramPositions ?? null,
+              sections: normalized.sections ?? [],
           },
           environmentId,
           createdAt: new Date(normalized.createdAt),
@@ -309,6 +318,7 @@ export class PostgresFlowRepository implements FlowRepository {
               onStepFailure: normalized.onStepFailure,
               connections: normalized.connections ?? null,
               diagramPositions: normalized.diagramPositions ?? null,
+              sections: normalized.sections ?? [],
             },
             environmentId,
             updatedAt: now,

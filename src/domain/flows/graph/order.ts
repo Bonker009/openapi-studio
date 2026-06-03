@@ -3,7 +3,7 @@ import type { Flow, FlowConnection, FlowStep } from "@/domain/flows/types";
 export function linearConnections(steps: FlowStep[]): FlowConnection[] {
   const conns: FlowConnection[] = [];
   for (let i = 0; i < steps.length - 1; i++) {
-    conns.push({ source: steps[i].id, target: steps[i + 1].id });
+    conns.push({ source: steps[i].id, target: steps[i + 1].id, kind: "seq" });
   }
   return conns;
 }
@@ -35,22 +35,48 @@ function createsCycle(
 export function addConnection(
   conns: FlowConnection[],
   source: string,
-  target: string
+  target: string,
+  kind: FlowConnection["kind"] = "seq",
+  sourceHandle?: string,
+  targetHandle?: string
 ): FlowConnection[] {
   if (source === target) return conns;
-  if (conns.some((c) => c.source === source && c.target === target)) {
+  if (conns.some((c) => c.source === source && c.target === target && (c.kind ?? "seq") === (kind ?? "seq"))) {
+    return conns;
+  }
+  if (
+    (kind === "true" || kind === "false") &&
+    conns.some((c) => c.source === source && (c.kind ?? "seq") === kind)
+  ) {
     return conns;
   }
   if (createsCycle(conns, source, target)) return conns;
-  return [...conns, { source, target }];
+  return [
+    ...conns,
+    {
+      source,
+      target,
+      kind: kind ?? "seq",
+      sourceHandle,
+      targetHandle,
+    },
+  ];
 }
 
 export function removeConnection(
   conns: FlowConnection[],
   source: string,
-  target: string
+  target: string,
+  kind?: FlowConnection["kind"]
 ): FlowConnection[] {
-  return conns.filter((c) => !(c.source === source && c.target === target));
+  return conns.filter(
+    (c) =>
+      !(
+        c.source === source &&
+        c.target === target &&
+        (kind ? (c.kind ?? "seq") === kind : true)
+      )
+  );
 }
 
 export function pruneConnections(

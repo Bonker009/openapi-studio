@@ -280,6 +280,19 @@ export function AiAssistantContent({
       streaming: true,
     };
 
+    const history = chatMessages
+      .filter(
+        (m): m is ChatMessage & { role: "user" | "assistant" } =>
+          (m.role === "user" || m.role === "assistant") &&
+          !m.streaming &&
+          m.content.trim().length > 0
+      )
+      .slice(-12)
+      .map((m) => ({
+        role: m.role,
+        content: m.content.slice(0, 1500),
+      }));
+
     setChatMessages((prev) => [...prev, userMsg, assistantPlaceholder]);
     setQuestion("");
     setChatStatus("connecting");
@@ -296,6 +309,7 @@ export function AiAssistantContent({
         signal: ac.signal,
         chatProvider: chatSettings.provider,
         chatModel: chatSettings.model,
+        history,
       },
       {
         onOpen: () => {

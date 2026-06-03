@@ -18,10 +18,31 @@ export type Extraction = {
   path: string;
 };
 
+export type ConditionalOperator =
+  | "equals"
+  | "notEquals"
+  | "contains"
+  | "notContains"
+  | "gt"
+  | "gte"
+  | "lt"
+  | "lte"
+  | "isTrue"
+  | "isFalse"
+  | "exists";
+
+export type ConditionalRule = {
+  left: string;
+  operator: ConditionalOperator;
+  right?: string;
+};
+
 export type FlowStep = {
   id: string;
   /** Human-readable label (defaults from summary/operationId in UI). */
   name?: string;
+  /** request | conditional (legacy steps default to request). */
+  stepKind?: "request" | "conditional";
   endpointKey: string;
   paramValues: Record<string, string>;
   headerValues: Record<string, string>;
@@ -35,11 +56,19 @@ export type FlowStep = {
   ui?: StepUiMeta;
   /** Conditional mode: skip step when resolved expression is falsy. */
   condition?: string;
+  /** Typed conditional rule (preferred over string condition when present). */
+  conditional?: ConditionalRule;
 };
 
 export type FlowFailurePolicy = "stop" | "continue";
 
-export type FlowConnection = { source: string; target: string };
+export type FlowConnection = {
+  source: string;
+  target: string;
+  kind?: "seq" | "true" | "false";
+  sourceHandle?: string;
+  targetHandle?: string;
+};
 
 export type DiagramPosition = { x: number; y: number };
 
@@ -47,6 +76,23 @@ export type FlowAuth = {
   loginStepId: string;
   tokenVar: string;
   scheme?: "bearer";
+};
+
+export type FlowSection = {
+  id: string;
+  title: string;
+  position: DiagramPosition;
+  width: number;
+  height: number;
+  zIndex?: number;
+  style?: {
+    backgroundColor?: string;
+    borderColor?: string;
+  };
+  /** Step ids visually grouped by this section (runtime ignores for now). */
+  stepIds?: string[];
+  /** Reserved for future executable semantics. */
+  semanticType?: "group" | "phase" | "milestone" | string;
 };
 
 export type Flow = {
@@ -64,6 +110,7 @@ export type Flow = {
   onStepFailure: FlowFailurePolicy;
   connections?: FlowConnection[];
   diagramPositions?: Record<string, DiagramPosition>;
+  sections?: FlowSection[];
   createdAt: number;
   updatedAt: number;
 };
@@ -141,7 +188,7 @@ export const DIAGRAM_NODE_H = 76;
 export const DIAGRAM_ROW_GAP = 48;
 
 export function defaultDiagramPosition(index: number): DiagramPosition {
-  return { x: 80, y: index * (DIAGRAM_NODE_H + DIAGRAM_ROW_GAP) };
+  return { x: 80 + index * (DIAGRAM_NODE_W + DIAGRAM_ROW_GAP), y: 80 };
 }
 
 export function createRunContext(seed?: Partial<RunContext>): RunContext {
@@ -163,6 +210,7 @@ export function emptyFlow(specId: string, name = "Untitled flow"): Flow {
     description: "",
     steps: [],
     onStepFailure: "stop",
+    sections: [],
     createdAt: now,
     updatedAt: now,
   };

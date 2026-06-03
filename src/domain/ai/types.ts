@@ -62,6 +62,7 @@ export type GenerateFlowInput = {
   userIntent?: string;
   baseUrl?: string;
   conversationId?: string;
+  history?: QAHistoryMessage[];
 };
 
 export type GenerateFlowOutput = {
@@ -73,10 +74,16 @@ export type GenerateFlowOutput = {
   cached: boolean;
 };
 
+export type QAHistoryMessage = {
+  role: "user" | "assistant";
+  content: string;
+};
+
 export type QAInput = {
   specId: string;
   question: string;
   conversationId?: string;
+  history?: QAHistoryMessage[];
   /** Chat provider override (Ask Docs). */
   chatProvider?: "openai" | "groq";
   chatModel?: string;

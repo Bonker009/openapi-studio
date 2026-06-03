@@ -23,6 +23,8 @@ import {
   useNodesState,
   useEdgesState,
   useViewport,
+  NodeResizer,
+  type NodeChange,
   type Connection,
   type Node,
   type Edge,
@@ -107,6 +109,7 @@ import {
   newStepId,
   type Flow,
   type FlowConnection,
+  type FlowSection,
   type FlowStep,
   type StepRunResult,
 } from "@/lib/flows/types";
@@ -138,12 +141,18 @@ type StepNodeData = {
   isLogin?: boolean;
   statusClass: string;
   selected: boolean;
+  isConditional?: boolean;
   outcome?: StepRunResult["outcome"];
   index: number;
   error?: string;
   responseBody?: unknown;
   responseBodyPreview?: string;
   onRunFromHere?: () => void;
+};
+
+type SectionNodeData = {
+  title: string;
+  selected: boolean;
 };
 
 function statusColor(
@@ -260,10 +269,45 @@ function StepNode({ data }: { data: StepNodeData }) {
         position={Position.Top}
         id="target"
         className="!w-2.5 !h-2.5 !bg-muted-foreground !border-2 !border-background"
+        style={{ left: "50%" }}
+      />
+      <Handle
+        type="target"
+        position={Position.Top}
+        id="target-top-left"
+        className="!w-2 !h-2 !bg-muted-foreground !border !border-background"
+        style={{ left: "6px" }}
+      />
+      <Handle
+        type="target"
+        position={Position.Top}
+        id="target-top-right"
+        className="!w-2 !h-2 !bg-muted-foreground !border !border-background"
+        style={{ right: "6px", left: "auto" }}
+      />
+      <Handle
+        type="target"
+        position={Position.Bottom}
+        id="target-bottom-left"
+        className="!w-2 !h-2 !bg-muted-foreground !border !border-background"
+        style={{ left: "6px" }}
+      />
+      <Handle
+        type="target"
+        position={Position.Bottom}
+        id="target-bottom-right"
+        className="!w-2 !h-2 !bg-muted-foreground !border !border-background"
+        style={{ right: "6px", left: "auto" }}
       />
 
       <div className="flex items-center gap-2 mb-1">
-        <MethodBadge method={data.method} />
+        {data.isConditional ? (
+          <span className="rounded bg-primary/15 px-1.5 py-0.5 text-[10px] font-semibold text-primary">
+            IF
+          </span>
+        ) : (
+          <MethodBadge method={data.method} />
+        )}
         {data.role && (
           <span
             className={cn(
@@ -283,19 +327,107 @@ function StepNode({ data }: { data: StepNodeData }) {
         )}
       </div>
 
-      <p className="text-xs font-mono truncate">{data.label}</p>
+      <p className="text-xs font-mono truncate">
+        {data.isConditional ? data.label || "Conditional branch" : data.label}
+      </p>
 
-      <Handle
-        type="source"
-        position={Position.Bottom}
-        id="source"
-        className="!w-2.5 !h-2.5 !bg-primary !border-2 !border-background"
-      />
+      {data.isConditional ? (
+        <>
+          <Handle
+            type="source"
+            position={Position.Top}
+            id="source-top-left"
+            className="!w-2 !h-2 !bg-primary !border !border-background"
+            style={{ left: "6px" }}
+          />
+          <Handle
+            type="source"
+            position={Position.Top}
+            id="source-top-right"
+            className="!w-2 !h-2 !bg-primary !border !border-background"
+            style={{ right: "6px", left: "auto" }}
+          />
+          <Handle
+            type="source"
+            position={Position.Bottom}
+            id="true"
+            className="!w-2.5 !h-2.5 !bg-green-600 !border-2 !border-background"
+            style={{ left: "35%" }}
+          />
+          <Handle
+            type="source"
+            position={Position.Bottom}
+            id="false"
+            className="!w-2.5 !h-2.5 !bg-red-600 !border-2 !border-background"
+            style={{ left: "65%" }}
+          />
+        </>
+      ) : (
+        <>
+          <Handle
+            type="source"
+            position={Position.Bottom}
+            id="source"
+            className="!w-2.5 !h-2.5 !bg-primary !border-2 !border-background"
+            style={{ left: "50%" }}
+          />
+          <Handle
+            type="source"
+            position={Position.Top}
+            id="source-top-left"
+            className="!w-2 !h-2 !bg-primary !border !border-background"
+            style={{ left: "6px" }}
+          />
+          <Handle
+            type="source"
+            position={Position.Top}
+            id="source-top-right"
+            className="!w-2 !h-2 !bg-primary !border !border-background"
+            style={{ right: "6px", left: "auto" }}
+          />
+          <Handle
+            type="source"
+            position={Position.Bottom}
+            id="source-bottom-left"
+            className="!w-2 !h-2 !bg-primary !border !border-background"
+            style={{ left: "6px" }}
+          />
+          <Handle
+            type="source"
+            position={Position.Bottom}
+            id="source-bottom-right"
+            className="!w-2 !h-2 !bg-primary !border !border-background"
+            style={{ right: "6px", left: "auto" }}
+          />
+        </>
+      )}
     </div>
   );
 }
 
-const nodeTypes = { flowStep: memo(StepNode) };
+function SectionNode({ data }: { data: SectionNodeData }) {
+  return (
+    <div
+      className={cn(
+        "h-full w-full rounded-xl border border-dashed border-primary/30 bg-primary/5 p-2",
+        data.selected && "ring-2 ring-primary/50 ring-offset-1 ring-offset-background"
+      )}
+    >
+      <NodeResizer
+        isVisible={data.selected}
+        minWidth={260}
+        minHeight={160}
+        handleClassName="!h-2.5 !w-2.5 !border !border-background !bg-primary"
+        lineClassName="!border-primary/50"
+      />
+      <p className="truncate text-[11px] font-semibold uppercase tracking-wide text-primary/90">
+        {data.title}
+      </p>
+    </div>
+  );
+}
+
+const nodeTypes = { flowStep: memo(StepNode), flowSection: memo(SectionNode) };
 
 /** Connections used for rendering/ordering: explicit if present, else linear. */
 function effectiveConnections(flow: Flow): FlowConnection[] {
@@ -314,8 +446,34 @@ function buildNodesAndEdges(
 ): { nodes: Node[]; edges: Edge[] } {
   const depEdges = computeDependencyEdges(flow.steps);
   const positions = flow.diagramPositions ?? {};
+  const sections = flow.sections ?? [];
 
-  const nodes: Node[] = flow.steps.map((step: FlowStep, index) => {
+  const sectionNodes: Node[] = sections
+    .slice()
+    .sort((a, b) => (a.zIndex ?? 0) - (b.zIndex ?? 0))
+    .map((section) => ({
+      id: section.id,
+      type: "flowSection",
+      position: section.position,
+      width: section.width,
+      height: section.height,
+      data: {
+        title: section.title,
+        selected: selectedStepId === section.id,
+      } satisfies SectionNodeData,
+      style: {
+        width: section.width,
+        height: section.height,
+      },
+      selected: selectedStepId === section.id,
+      draggable: true,
+      selectable: true,
+      connectable: false,
+      zIndex: section.zIndex ?? -1,
+      ariaRole: "region",
+    }));
+
+  const stepNodes: Node[] = flow.steps.map((step: FlowStep, index) => {
     const ep = endpoints.find((e) => flowEndpointKey(e) === step.endpointKey);
     const result = resultByStepId.get(step.id);
     const running = runningIndex === index;
@@ -329,11 +487,13 @@ function buildNodesAndEdges(
       width: DIAGRAM_NODE_W,
       data: {
         label: ep?.path ?? step.endpointKey,
-        method: ep?.method ?? "GET",
+        method:
+          step.stepKind === "conditional" ? "IF" : ep?.method ?? "GET",
         role,
         isLogin,
         statusClass: statusColor(result?.outcome, running),
         selected: selectedStepId === step.id,
+        isConditional: step.stepKind === "conditional",
         outcome: result?.outcome,
         index,
         error: result?.error,
@@ -345,8 +505,10 @@ function buildNodesAndEdges(
       } satisfies StepNodeData,
       selected: selectedStepId === step.id,
       draggable: true,
+      zIndex: 10,
     };
   });
+  const nodes: Node[] = [...sectionNodes, ...stepNodes];
 
   const seqStroke = "var(--muted-foreground)";
   const depStroke = "var(--primary)";
@@ -359,20 +521,61 @@ function buildNodesAndEdges(
       id: `seq:${conn.source}->${conn.target}`,
       source: conn.source,
       target: conn.target,
-      sourceHandle: "source",
-      targetHandle: "target",
+      sourceHandle:
+        conn.sourceHandle ??
+        (conn.kind === "true"
+          ? "true"
+          : conn.kind === "false"
+            ? "false"
+            : "source"),
+      targetHandle: conn.targetHandle ?? "target",
       type: "smoothstep",
       animated: true,
       className: "flow-edge-seq",
-      data: { kind: "seq" },
+      data: { kind: conn.kind ?? "seq" },
       deletable: true,
       reconnectable: true,
-      style: { stroke: seqStroke, strokeWidth: 2 },
+      label:
+        conn.kind === "true"
+          ? "true"
+          : conn.kind === "false"
+            ? "false"
+            : undefined,
+      labelStyle:
+        conn.kind === "true" || conn.kind === "false"
+          ? { fontSize: 10, fill: "var(--foreground)" }
+          : undefined,
+      labelBgStyle:
+        conn.kind === "true" || conn.kind === "false"
+          ? { fill: "var(--card)" }
+          : undefined,
+      labelBgPadding:
+        conn.kind === "true" || conn.kind === "false"
+          ? ([4, 2] as [number, number])
+          : undefined,
+      labelBgBorderRadius:
+        conn.kind === "true" || conn.kind === "false" ? 4 : undefined,
+      style: {
+        stroke:
+          conn.kind === "true"
+            ? "var(--success)"
+            : conn.kind === "false"
+              ? "var(--destructive)"
+              : seqStroke,
+        strokeWidth: 2.2,
+        opacity: 0.95,
+      },
+      interactionWidth: 24,
       markerEnd: {
         type: MarkerType.ArrowClosed,
-        width: 16,
-        height: 16,
-        color: seqStroke,
+        width: 18,
+        height: 18,
+        color:
+          conn.kind === "true"
+            ? "var(--success)"
+            : conn.kind === "false"
+              ? "var(--destructive)"
+              : seqStroke,
       },
     });
   }
@@ -399,7 +602,8 @@ function buildNodesAndEdges(
       labelBgStyle: { fill: "var(--card)" },
       labelBgPadding: [4, 2] as [number, number],
       labelBgBorderRadius: 4,
-      style: { stroke: depStroke, strokeWidth: 2.5 },
+      style: { stroke: depStroke, strokeWidth: 2.5, opacity: 0.9 },
+      interactionWidth: 24,
       markerEnd: {
         type: MarkerType.ArrowClosed,
         width: 16,
@@ -531,7 +735,7 @@ function EndpointPalette({
   );
 }
 
-type MenuKind = "node" | "edge" | "pane";
+type MenuKind = "node" | "section" | "edge" | "pane";
 
 type MenuState = {
   x: number;
@@ -634,6 +838,7 @@ function FlowCanvas({
   const [paletteOpen, setPaletteOpen] = useState(true);
   const [showMiniMap, setShowMiniMap] = useState(true);
   const [showGrid, setShowGrid] = useState(true);
+  const [announcement, setAnnouncement] = useState("");
   const [menu, setMenu] = useState<MenuState | null>(null);
   const diagramRootRef = useRef<HTMLDivElement>(null);
 
@@ -641,7 +846,8 @@ function FlowCanvas({
     (restored: Flow) => {
       if (
         selectedStepId &&
-        !restored.steps.some((s) => s.id === selectedStepId)
+        !restored.steps.some((s) => s.id === selectedStepId) &&
+        !(restored.sections ?? []).some((s) => s.id === selectedStepId)
       ) {
         onSelectStep(null);
       }
@@ -701,8 +907,38 @@ function FlowCanvas({
     [flow, endpoints, resultByStepId, runningIndex, selectedStepId, onRunFromStep]
   );
 
-  const [nodes, setNodes, onNodesChange] = useNodesState(layout.nodes);
+  const [nodes, setNodes, onNodesChangeBase] = useNodesState(layout.nodes);
   const [edges, setEdges, onEdgesChange] = useEdgesState(layout.edges);
+
+  const onNodesChange = useCallback(
+    (changes: NodeChange<Node>[]) => {
+      onNodesChangeBase(changes);
+      const sections = flow.sections ?? [];
+      if (sections.length === 0) return;
+      let nextSections: FlowSection[] | null = null;
+      for (const change of changes) {
+        if (!("id" in change)) continue;
+        if (!change.id.startsWith("section-")) continue;
+        const idx = sections.findIndex((s) => s.id === change.id);
+        if (idx < 0) continue;
+        const current: FlowSection[] = [...(nextSections ?? sections)];
+        const item = { ...current[idx] };
+        if (change.type === "position" && change.position) {
+          item.position = change.position;
+        }
+        if (change.type === "dimensions" && change.dimensions) {
+          item.width = change.dimensions.width ?? item.width;
+          item.height = change.dimensions.height ?? item.height;
+        }
+        current[idx] = item;
+        nextSections = current;
+      }
+      if (nextSections) {
+        commitDiagramChange({ ...flow, sections: nextSections });
+      }
+    },
+    [onNodesChangeBase, flow, commitDiagramChange]
+  );
 
   useEffect(() => {
     setNodes(layout.nodes);
@@ -738,24 +974,133 @@ function FlowCanvas({
     [flow, commitDiagramChange]
   );
 
+  const upsertSection = useCallback(
+    (sectionId: string, patch: Partial<FlowSection>) => {
+      const sections = flow.sections ?? [];
+      const next = sections.map((s) =>
+        s.id === sectionId ? { ...s, ...patch } : s
+      );
+      commitDiagramChange({ ...flow, sections: next });
+    },
+    [flow, commitDiagramChange]
+  );
+
+  const createSection = useCallback(() => {
+    const idx = (flow.sections?.length ?? 0) + 1;
+    const width = 520;
+    const height = 220;
+    const rootRect = diagramRootRef.current?.getBoundingClientRect();
+    const viewportCenter = rootRect
+      ? screenToFlowPosition({
+          x: rootRect.left + rootRect.width / 2,
+          y: rootRect.top + rootRect.height / 2,
+        })
+      : { x: 320 + idx * 24, y: 180 + idx * 20 };
+
+    const section: FlowSection = {
+      id: `section-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+      title: `Section ${idx}`,
+      position: {
+        x: Math.max(0, viewportCenter.x - width / 2),
+        y: Math.max(0, viewportCenter.y - height / 2),
+      },
+      width,
+      height,
+      zIndex: idx,
+      stepIds: [],
+      semanticType: "group",
+    };
+    commitDiagramChange({ ...flow, sections: [...(flow.sections ?? []), section] });
+    onSelectStep(section.id);
+    requestAnimationFrame(() => {
+      void fitView({
+        duration: 220,
+        padding: 0.2,
+        nodes: [{ id: section.id }],
+      });
+      setCenter(
+        section.position.x + section.width / 2,
+        section.position.y + section.height / 2,
+        { zoom: Math.max(zoom, 0.95), duration: 220 }
+      );
+    });
+    setAnnouncement(
+      `${section.title} added at viewport center and selected. Use resize handles to adjust.`
+    );
+  }, [
+    flow,
+    commitDiagramChange,
+    onSelectStep,
+    screenToFlowPosition,
+    fitView,
+    setCenter,
+    zoom,
+  ]);
+
+  const deleteSection = useCallback(
+    (sectionId: string) => {
+      const sections = (flow.sections ?? []).filter((s) => s.id !== sectionId);
+      commitDiagramChange({ ...flow, sections });
+      if (selectedStepId === sectionId) onSelectStep(null);
+      setAnnouncement("Section deleted");
+    },
+    [flow, commitDiagramChange, selectedStepId, onSelectStep]
+  );
+
   const onNodeDragStop = useCallback(
     (_: React.MouseEvent, node: Node) => {
+      const isSection = node.id.startsWith("section-");
+      if (isSection) {
+        upsertSection(node.id, {
+          position: { x: node.position.x, y: node.position.y },
+          width: node.width ?? 520,
+          height: node.height ?? 220,
+        });
+        return;
+      }
       persistPositions(node.id, node.position.x, node.position.y);
     },
-    [persistPositions]
+    [persistPositions, upsertSection]
   );
 
   const onConnect = useCallback(
     (conn: Connection) => {
       if (!conn.source || !conn.target) return;
       const base = flow.connections ?? linearConnections(flow.steps);
-      const nextConns = addConnection(base, conn.source, conn.target);
+      const sourceStep = flow.steps.find((s) => s.id === conn.source);
+      let kind: FlowConnection["kind"] = "seq";
+      if (sourceStep?.stepKind === "conditional") {
+        if (conn.sourceHandle === "true" || conn.sourceHandle === "false") {
+          kind = conn.sourceHandle;
+        }
+        const outgoing = base.filter((c) => c.source === conn.source);
+        if (kind === "seq") {
+          const hasTrue = outgoing.some((c) => (c.kind ?? "seq") === "true");
+          const hasFalse = outgoing.some((c) => (c.kind ?? "seq") === "false");
+          kind = !hasTrue ? "true" : !hasFalse ? "false" : "seq";
+        }
+      }
+      const nextConns = addConnection(base, conn.source, conn.target, kind);
+      const next =
+        nextConns === base
+          ? base
+          : nextConns.map((c) =>
+              c.source === conn.source &&
+              c.target === conn.target &&
+              (c.kind ?? "seq") === (kind ?? "seq")
+                ? {
+                    ...c,
+                    sourceHandle: conn.sourceHandle ?? c.sourceHandle,
+                    targetHandle: conn.targetHandle ?? c.targetHandle,
+                  }
+                : c
+            );
       if (nextConns === base) return;
       const reordered = reorderStepsByConnections({
         ...flow,
-        connections: nextConns,
+        connections: next,
       });
-      commitDiagramChange({ ...flow, connections: nextConns, steps: reordered });
+      commitDiagramChange({ ...flow, connections: next, steps: reordered });
     },
     [flow, commitDiagramChange]
   );
@@ -805,7 +1150,10 @@ function FlowCanvas({
       const added = addConnection(
         removed,
         newConnection.source,
-        newConnection.target
+        newConnection.target,
+        "seq",
+        newConnection.sourceHandle ?? undefined,
+        newConnection.targetHandle ?? undefined
       );
       // addConnection returns the same array when the new edge is a duplicate or
       // would create a cycle; in that case keep the original wiring untouched.
@@ -854,6 +1202,7 @@ function FlowCanvas({
         },
       });
       onSelectStep(step.id);
+      setAnnouncement(`Added step ${endpoint.method} ${endpoint.path}`);
     },
     [
       flow,
@@ -876,6 +1225,7 @@ function FlowCanvas({
     try {
       const positions = await layoutWithElk(stepIds, effectiveConnections(flow));
       commitDiagramChange({ ...flow, diagramPositions: positions });
+      setAnnouncement("Auto-arranged steps horizontally");
       requestAnimationFrame(() => void fitView({ padding: 0.25, duration: 200 }));
     } catch {
       const ordered = orderSteps(flow);
@@ -884,19 +1234,42 @@ function FlowCanvas({
         positions[s.id] = defaultDiagramPosition(i);
       });
       commitDiagramChange({ ...flow, diagramPositions: positions });
+      setAnnouncement("Auto-arranged steps horizontally");
       requestAnimationFrame(() => void fitView({ padding: 0.25, duration: 200 }));
     }
   }, [flow, commitDiagramChange, fitView]);
 
   const deleteSelected = useCallback(() => {
     const selectedNodeIds = nodes.filter((n) => n.selected).map((n) => n.id);
-    if (selectedNodeIds.length > 0) {
-      deleteSteps(selectedNodeIds);
+    const sectionIds = selectedNodeIds.filter((id) => id.startsWith("section-"));
+    const stepIds = selectedNodeIds.filter((id) => !id.startsWith("section-"));
+    if (sectionIds.length > 0) {
+      const remaining = (flow.sections ?? []).filter((s) => !sectionIds.includes(s.id));
+      commitDiagramChange({ ...flow, sections: remaining });
+      setAnnouncement("Deleted selected section");
+      if (selectedStepId && sectionIds.includes(selectedStepId)) onSelectStep(null);
+      return;
+    }
+    if (stepIds.length > 0) {
+      deleteSteps(stepIds);
+      setAnnouncement("Deleted selected step");
       return;
     }
     const selectedEdges = edges.filter((e) => e.selected);
-    if (selectedEdges.length > 0) deleteSeqEdges(selectedEdges);
-  }, [nodes, edges, deleteSteps, deleteSeqEdges]);
+    if (selectedEdges.length > 0) {
+      deleteSeqEdges(selectedEdges);
+      setAnnouncement("Deleted selected connection");
+    }
+  }, [
+    nodes,
+    edges,
+    deleteSteps,
+    deleteSeqEdges,
+    flow,
+    commitDiagramChange,
+    selectedStepId,
+    onSelectStep,
+  ]);
 
   const duplicateStep = useCallback(
     (id: string) => {
@@ -924,15 +1297,30 @@ function FlowCanvas({
   );
 
   const onNodeClick = useCallback(
-    (_: React.MouseEvent, node: Node) => onSelectStep(node.id),
+    (_: React.MouseEvent, node: Node) => {
+      onSelectStep(node.id);
+      if (node.id.startsWith("section-")) {
+        setAnnouncement("Section selected");
+      } else {
+        setAnnouncement("Step selected");
+      }
+    },
     [onSelectStep]
   );
 
-  const onPaneClick = useCallback(() => onSelectStep(null), [onSelectStep]);
+  const onPaneClick = useCallback(() => {
+    onSelectStep(null);
+    setAnnouncement("Selection cleared");
+  }, [onSelectStep]);
 
   const onNodeContextMenu = useCallback((e: React.MouseEvent, node: Node) => {
     e.preventDefault();
-    setMenu({ x: e.clientX, y: e.clientY, kind: "node", targetId: node.id });
+    setMenu({
+      x: e.clientX,
+      y: e.clientY,
+      kind: node.id.startsWith("section-") ? "section" : "node",
+      targetId: node.id,
+    });
   }, []);
 
   const onEdgeContextMenu = useCallback((e: React.MouseEvent, edge: Edge) => {
@@ -987,6 +1375,29 @@ function FlowCanvas({
         },
       ];
     }
+    if (menu.kind === "section" && menu.targetId) {
+      const targetId = menu.targetId;
+      return [
+        {
+          label: "Rename section",
+          icon: <Wand2 className="h-3.5 w-3.5" />,
+          onClick: () => {
+            const current = (flow.sections ?? []).find((s) => s.id === targetId);
+            if (!current) return;
+            const next = prompt("Section title", current.title)?.trim();
+            if (!next) return;
+            upsertSection(targetId, { title: next });
+            setAnnouncement(`Renamed section to ${next}`);
+          },
+        },
+        {
+          label: "Delete section",
+          icon: <Trash2 className="h-3.5 w-3.5" />,
+          danger: true,
+          onClick: () => deleteSection(targetId),
+        },
+      ];
+    }
     if (menu.kind === "edge" && menu.targetId) {
       const edge = edges.find((x) => x.id === menu.targetId);
       return [
@@ -1001,6 +1412,11 @@ function FlowCanvas({
       ];
     }
     return [
+      {
+        label: "Add section",
+        icon: <Plus className="h-3.5 w-3.5" />,
+        onClick: createSection,
+      },
       {
         label: "Add endpoint",
         icon: <Plus className="h-3.5 w-3.5" />,
@@ -1029,6 +1445,9 @@ function FlowCanvas({
     fitView,
     flow,
     commitDiagramChange,
+    createSection,
+    upsertSection,
+    deleteSection,
   ]);
 
   return (
@@ -1067,6 +1486,8 @@ function FlowCanvas({
           nodesDraggable
           nodesConnectable
           elementsSelectable
+          nodesFocusable
+          edgesFocusable
           panOnDrag
           zoomOnScroll
           proOptions={{ hideAttribution: true }}
@@ -1082,6 +1503,9 @@ function FlowCanvas({
                 onClick={() => setPaletteOpen((v) => !v)}
               >
                 <Plus className="h-4 w-4" />
+              </ToolbarButton>
+              <ToolbarButton label="Add section" onClick={createSection}>
+                <Copy className="h-4 w-4" />
               </ToolbarButton>
               <FlowAuthPopover
                 flow={flow}
@@ -1182,6 +1606,9 @@ function FlowCanvas({
         items={menuItems}
         onClose={() => setMenu(null)}
       />
+      <div className="sr-only" aria-live="polite">
+        {announcement}
+      </div>
     </div>
   );
 }
@@ -1327,6 +1754,7 @@ function ToolbarButton({
           variant={active ? "secondary" : "ghost"}
           size="icon"
           className="h-8 w-8"
+          aria-label={label}
           disabled={disabled}
           onClick={onClick}
         >

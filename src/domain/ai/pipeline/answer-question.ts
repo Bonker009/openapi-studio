@@ -1,5 +1,5 @@
 import type { AIDocumentationAssistant } from "@/domain/ai/contracts";
-import type { QAInput, QAOutput } from "@/domain/ai/types";
+import type { QAHistoryMessage, QAInput, QAOutput } from "@/domain/ai/types";
 import { chunksToContextBlocks } from "@/domain/ai/pipeline/context-format";
 import { OpenApiRetriever } from "@/infrastructure/ai/rag/openapi-retriever";
 import { PostgresAiRepository } from "@/infrastructure/ai/repositories/postgres-ai-repository";
@@ -10,6 +10,17 @@ export type AnswerQuestionDeps = {
   retriever?: OpenApiRetriever;
   repository?: PostgresAiRepository;
 };
+
+function buildHistoryAwareQuery(
+  question: string,
+  history: QAHistoryMessage[] | undefined
+): string {
+  const prior = (history ?? [])
+    .slice(-6)
+    .map((m) => `${m.role}: ${m.content}`)
+    .join("\n");
+  return prior ? `${prior}\nCurrent user question: ${question}` : question;
+}
 
 export async function answerOpenApiQuestion(
   input: QAInput,
@@ -28,7 +39,7 @@ export async function answerOpenApiQuestion(
 
   const retrievedChunks = await retriever.retrieve({
     specId: input.specId,
-    query: input.question,
+    query: buildHistoryAwareQuery(input.question, input.history),
   });
   const contextBlocks = chunksToContextBlocks(retrievedChunks);
 
@@ -43,7 +54,7 @@ export async function answerOpenApiQuestion(
     kind: "question",
     status: "success",
     attempt: 1,
-    inputJson: { question: input.question },
+    inputJson: { question: input.question, history: input.history ?? [] },
     outputJson: { answer: result.answer, citedEndpoints: result.citedEndpoints },
     validationJson: {},
     conversationId: input.conversationId,

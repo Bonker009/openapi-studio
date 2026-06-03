@@ -7,7 +7,7 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint .",
-    "test": "tsx --test lib/openapi-diff.test.ts lib/playground/generate-sample.test.ts lib/playground/request-body.test.ts lib/playground/build-form-data.test.ts lib/validation/pass-policy.test.ts lib/validation/overrides.test.ts lib/validation/case-builder.test.ts lib/flows/run-flow.test.ts src/infrastructure/flows/flow-persistence-service.test.ts src/domain/ai/validation/flow-schema-validator.test.ts src/infrastructure/ai/rag/openapi-chunker.test.ts src/infrastructure/ai/rag/openapi-retriever.test.ts src/infrastructure/ai/chat-provider-config.test.ts src/domain/ai/adapters/flow-contract-adapter.test.ts src/infrastructure/ai/rag/embedding-math.test.ts src/domain/ai/pipeline/plan-parser.test.ts src/domain/ai/pipeline/auto-fix-loop.test.ts src/domain/ai/pipeline/cache-key.test.ts src/domain/ai/validation/extract-citations.test.ts",
+    "test": "tsx --test lib/openapi-diff.test.ts lib/playground/generate-sample.test.ts lib/playground/request-body.test.ts lib/playground/build-form-data.test.ts lib/validation/pass-policy.test.ts lib/validation/overrides.test.ts lib/validation/case-builder.test.ts lib/flows/run-flow.test.ts lib/flows/conditional-step.test.ts src/infrastructure/flows/flow-persistence-service.test.ts src/domain/ai/validation/flow-schema-validator.test.ts src/infrastructure/ai/rag/openapi-chunker.test.ts src/infrastructure/ai/rag/openapi-retriever.test.ts src/infrastructure/ai/chat-provider-config.test.ts src/domain/ai/adapters/flow-contract-adapter.test.ts src/infrastructure/ai/rag/embedding-math.test.ts src/domain/ai/pipeline/plan-parser.test.ts src/domain/ai/pipeline/auto-fix-loop.test.ts src/domain/ai/pipeline/cache-key.test.ts src/domain/ai/validation/extract-citations.test.ts",
     "db:generate": "drizzle-kit generate --config drizzle.pg.config.ts",
     "db:migrate": "node --env-file=.env --import tsx scripts/run-migrate-pg.ts",
     "docker:db": "docker compose -f docker-compose.db.yml up -d",
@@ -15,6 +15,8 @@
     "docker:app": "docker compose -f docker-compose.yml -f docker-compose.db.yml -f docker-compose.postgres.yml up -d --build"
   },
   "dependencies": {
+    "@ai-sdk/groq": "^3.0.39",
+    "@ai-sdk/openai": "^3.0.67",
     "@codemirror/autocomplete": "^6.20.2",
     "@codemirror/commands": "^6.10.3",
     "@codemirror/lang-json": "^6.0.2",
@@ -37,6 +39,7 @@
     "@tanstack/react-table": "^8.21.3",
     "@uiw/react-codemirror": "^4.25.10",
     "@xyflow/react": "^12.10.2",
+    "ai": "^6.0.194",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "cmdk": "^1.1.1",

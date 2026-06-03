@@ -2,6 +2,7 @@ export function buildDocumentationPrompt(input: {
   question: string;
   allowedEndpoints: string[];
   contextBlocks: string[];
+  history?: { role: "user" | "assistant"; content: string }[];
 }): string {
   const total = input.allowedEndpoints.length;
   const hasContext = input.contextBlocks.length > 0;
@@ -15,6 +16,17 @@ export function buildDocumentationPrompt(input: {
         "Retrieved evidence: (none matched this question well.)",
         "Answer from the full endpoint list when possible, or explain what is missing.",
       ];
+
+  const conversationSection = (input.history ?? []).length
+    ? [
+        "Conversation so far (most recent first):",
+        ...(input.history ?? [])
+          .slice(-12)
+          .map((m) => `- ${m.role}: ${m.content.slice(0, 500)}`),
+        "Use this conversation to resolve references like 'that body' or 'the previous endpoint'.",
+        "",
+      ]
+    : [];
 
   return [
     "You are an OpenAPI documentation assistant.",
@@ -32,6 +44,7 @@ export function buildDocumentationPrompt(input: {
     "endpoint in this spec. For counting, listing, grouping, or \"how many\" questions,",
     "use that full list (not only the retrieved evidence section).",
     "",
+    ...conversationSection,
     `Question: ${input.question}`,
     "",
     `All endpoints (${total} total, authoritative):`,

@@ -1,4 +1,4 @@
-import type { QAInput } from "@/domain/ai/types";
+import type { QAInput, QAHistoryMessage } from "@/domain/ai/types";
 import { chunksToContextBlocks } from "@/domain/ai/pipeline/context-format";
 import { buildDocumentationPrompt } from "@/domain/ai/prompts/documentation-prompt-builder";
 import { extractCitedEndpointsFromAnswer } from "@/domain/ai/validation/extract-citations";
@@ -25,6 +25,24 @@ export type StreamAnswerInput = QAInput & {
   signal?: AbortSignal;
 };
 
+function buildHistoryAwareQuery(
+  question: string,
+  history: QAHistoryMessage[] | undefined
+): string {
+  const prior = (history ?? [])
+    .slice(-6)
+    .map((m) => `${m.role}: ${m.content}`)
+    .join("\n");
+  return prior ? `${prior}\nCurrent user question: ${question}` : question;
+}
+
+function toModelHistory(history: QAHistoryMessage[] | undefined) {
+  return (history ?? []).slice(-12).map((m) => ({
+    role: m.role,
+    content: m.content.slice(0, 1500),
+  }));
+}
+
 export async function streamOpenApiQuestion(
   input: StreamAnswerInput,
   handlers: StreamAnswerHandlers,
@@ -43,9 +61,10 @@ export async function streamOpenApiQuestion(
     }
 
     handlers.onStatus?.("retrieving");
+    const retrievalQuery = buildHistoryAwareQuery(input.question, input.history);
     const retrievedChunks = await retriever.retrieve({
       specId: input.specId,
-      query: input.question,
+      query: retrievalQuery,
     });
     const contextBlocks = chunksToContextBlocks(retrievedChunks);
 
@@ -53,6 +72,7 @@ export async function streamOpenApiQuestion(
       question: input.question,
       allowedEndpoints,
       contextBlocks,
+      history: input.history,
     });
 
     handlers.onStatus?.("generating");
@@ -65,6 +85,7 @@ export async function streamOpenApiQuestion(
           provider: input.chatProvider,
           model: input.chatModel,
         },
+        messages: toModelHistory(input.history),
       },
       { onDelta: handlers.onDelta }
     );
@@ -79,7 +100,11 @@ export async function streamOpenApiQuestion(
       kind: "question",
       status: "success",
       attempt: 1,
-      inputJson: { question: input.question, stream: true },
+      inputJson: {
+        question: input.question,
+        stream: true,
+        history: input.history ?? [],
+      },
       outputJson: { answer, citedEndpoints },
       validationJson: {},
       conversationId: input.conversationId,

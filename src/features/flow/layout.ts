@@ -16,7 +16,7 @@ const elk = new ELK();
 export async function layoutWithElk(
   nodeIds: string[],
   edges: LayoutEdge[],
-  direction: "DOWN" | "RIGHT" = "DOWN"
+  direction: "DOWN" | "RIGHT" = "RIGHT"
 ): Promise<Record<string, DiagramPosition>> {
   if (nodeIds.length === 0) return {};
 
@@ -26,8 +26,8 @@ export async function layoutWithElk(
     layoutOptions: {
       "elk.algorithm": "layered",
       "elk.direction": direction,
-      "elk.spacing.nodeNode": "48",
-      "elk.layered.spacing.nodeNodeBetweenLayers": "72",
+      "elk.spacing.nodeNode": "56",
+      "elk.layered.spacing.nodeNodeBetweenLayers": "120",
       "elk.layered.considerModelOrder.strategy": "NODES_AND_EDGES",
     },
     children: nodeIds.map((id) => ({

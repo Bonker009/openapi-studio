@@ -118,7 +118,7 @@ export function validateFlowDefinition(
 
 /** Validate legacy flow (wraps existing checks + schema hints). */
 export function validateLegacyFlowSchema(
-  flow: Pick<Flow, "steps" | "baseUrl" | "auth">
+  flow: Pick<Flow, "steps" | "baseUrl" | "auth" | "connections">
 ): FlowValidationIssue[] {
   const issues: FlowValidationIssue[] = [];
   flow.steps.forEach((step, stepIndex) => {
@@ -126,6 +126,44 @@ export function validateLegacyFlowSchema(
       ...validateTokens(collectStringsFromStep(step), stepIndex, step.id)
     );
   });
+  if (flow.connections?.length) {
+    const validIds = new Set(flow.steps.map((s) => s.id));
+    for (const step of flow.steps) {
+      if (step.stepKind !== "conditional") continue;
+      const outgoing = flow.connections.filter((c) => c.source === step.id);
+      const trueEdges = outgoing.filter((c) => (c.kind ?? "seq") === "true");
+      const falseEdges = outgoing.filter((c) => (c.kind ?? "seq") === "false");
+      if (trueEdges.length !== 1 || falseEdges.length !== 1) {
+        issues.push({
+          stepIndex: flow.steps.findIndex((s) => s.id === step.id),
+          stepId: step.id,
+          field: "connections",
+          message: "Conditional step must have exactly one true and one false edge",
+          severity: "error",
+        });
+      }
+      for (const edge of outgoing) {
+        if (!validIds.has(edge.target)) {
+          issues.push({
+            stepIndex: flow.steps.findIndex((s) => s.id === step.id),
+            stepId: step.id,
+            field: "connections",
+            message: "Connection target is invalid",
+            severity: "error",
+          });
+        }
+      }
+      if (!step.conditional?.left?.trim()) {
+        issues.push({
+          stepIndex: flow.steps.findIndex((s) => s.id === step.id),
+          stepId: step.id,
+          field: "conditional.left",
+          message: "Conditional step left expression is required",
+          severity: "error",
+        });
+      }
+    }
+  }
   return issues;
 }
 

@@ -47,6 +47,7 @@ import {
 } from "@/lib/flows/auth-helpers";
 import {
   flowEndpointKey,
+  type ConditionalOperator,
   MAX_FLOW_STEPS,
   newStepId,
   type Flow,
@@ -199,6 +200,28 @@ export function FlowBuilder({
     onSelectStep(step.id);
     setPickerOpen(false);
     setPickerSearch("");
+    setValidationDismissed(false);
+  };
+
+  const addConditionalStep = () => {
+    if (flow.steps.length >= MAX_FLOW_STEPS) return;
+    const step: FlowStep = {
+      id: newStepId(),
+      name: "Condition",
+      stepKind: "conditional",
+      endpointKey: "CONDITION:branch",
+      paramValues: {},
+      headerValues: {},
+      extractions: [],
+      conditional: {
+        left: "{{vars.value}}",
+        operator: "equals",
+        right: "true",
+      },
+    };
+    const steps = [...flow.steps, step];
+    onChange({ ...flow, steps, connections: linearConnections(steps) });
+    onSelectStep(step.id);
     setValidationDismissed(false);
   };
 
@@ -473,6 +496,17 @@ export function FlowBuilder({
               </Command>
             </PopoverContent>
           </Popover>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            className="gap-1.5"
+            disabled={flow.steps.length >= MAX_FLOW_STEPS}
+            onClick={addConditionalStep}
+          >
+            <Plus className="h-3.5 w-3.5" />
+            Add condition
+          </Button>
         </div>
       </div>
 
@@ -514,6 +548,95 @@ export function FlowBuilder({
       <div className="grid grid-cols-1 xl:grid-cols-2 gap-3">
         {orderedSteps.map((step, index) => {
           const realIndex = flow.steps.findIndex((s) => s.id === step.id);
+          if (step.stepKind === "conditional") {
+            const cond = step.conditional;
+            return (
+              <div key={step.id} className="rounded-lg border p-3 bg-card space-y-2">
+                <div className="flex items-center justify-between">
+                  <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                    Conditional step
+                  </p>
+                  <div className="flex items-center gap-1">
+                    <Button type="button" variant="outline" size="sm" className="h-7 text-xs" onClick={() => removeStep(realIndex)}>
+                      Remove
+                    </Button>
+                  </div>
+                </div>
+                <Input
+                  value={step.name ?? ""}
+                  onChange={(e) => updateStep(realIndex, { ...step, name: e.target.value })}
+                  placeholder="Condition name"
+                  className="h-8 text-xs"
+                />
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                  <Input
+                    value={cond?.left ?? ""}
+                    onChange={(e) =>
+                      updateStep(realIndex, {
+                        ...step,
+                        conditional: {
+                          left: e.target.value,
+                          operator: cond?.operator ?? "equals",
+                          right: cond?.right,
+                        },
+                      })
+                    }
+                    placeholder="{{vars.someValue}}"
+                    className="h-8 text-xs font-mono"
+                  />
+                  <Select
+                    value={(cond?.operator ?? "equals") as ConditionalOperator}
+                    onValueChange={(v) =>
+                      updateStep(realIndex, {
+                        ...step,
+                        conditional: {
+                          left: cond?.left ?? "{{vars.value}}",
+                          operator: v as ConditionalOperator,
+                          right: cond?.right,
+                        },
+                      })
+                    }
+                  >
+                    <SelectTrigger className="h-8 text-xs">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="equals">equals</SelectItem>
+                      <SelectItem value="notEquals">notEquals</SelectItem>
+                      <SelectItem value="contains">contains</SelectItem>
+                      <SelectItem value="notContains">notContains</SelectItem>
+                      <SelectItem value="gt">gt</SelectItem>
+                      <SelectItem value="gte">gte</SelectItem>
+                      <SelectItem value="lt">lt</SelectItem>
+                      <SelectItem value="lte">lte</SelectItem>
+                      <SelectItem value="isTrue">isTrue</SelectItem>
+                      <SelectItem value="isFalse">isFalse</SelectItem>
+                      <SelectItem value="exists">exists</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <Input
+                    value={cond?.right ?? ""}
+                    onChange={(e) =>
+                      updateStep(realIndex, {
+                        ...step,
+                        conditional: {
+                          left: cond?.left ?? "{{vars.value}}",
+                          operator: cond?.operator ?? "equals",
+                          right: e.target.value,
+                        },
+                      })
+                    }
+                    placeholder="true / text / 200"
+                    className="h-8 text-xs font-mono"
+                    disabled={cond?.operator === "isTrue" || cond?.operator === "isFalse" || cond?.operator === "exists"}
+                  />
+                </div>
+                <p className="text-[11px] text-muted-foreground">
+                  Connect this step to two next steps in Diagram using true/false edges.
+                </p>
+              </div>
+            );
+          }
           return (
             <FlowStepCard
               key={step.id}
