@@ -42,6 +42,7 @@ import {
   type PersistedChatMessage,
 } from "@/components/ai/ai-assistant-persistence";
 import { cn } from "@/lib/utils";
+import { DbAssistantPanel } from "@/components/db/db-assistant-panel";
 
 export type AiAssistantContentProps = {
   specId: string;
@@ -402,6 +403,9 @@ export function AiAssistantContent({
           <TabsTrigger value="index" className="flex-1">
             Index
           </TabsTrigger>
+          <TabsTrigger value="database" className="flex-1">
+            Database
+          </TabsTrigger>
         </TabsList>
 
         <TabsContent
@@ -676,6 +680,10 @@ export function AiAssistantContent({
               />
             </div>
           ) : null}
+        </TabsContent>
+
+        <TabsContent value="database" className="mt-3 space-y-3">
+          <DbAssistantPanel specId={specId} />
         </TabsContent>
 
         <TabsContent value="index" className="mt-3 space-y-3">

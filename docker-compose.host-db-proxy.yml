@@ -1,0 +1,19 @@
+# For Postgres on the host bound to 127.0.0.1 only (e.g. Ventro on :5432).
+# A host-network socat forwards 0.0.0.0:15433 → 127.0.0.1:5432 so bridge containers can connect.
+#
+#   docker compose -f docker-compose.yml -f docker-compose.host-db-proxy.yml up -d --build
+#
+# In .env set: DB_CONNECT_DOCKER_PROXY_PORT=15433
+
+services:
+  host-db-proxy:
+    image: alpine/socat:1.0.5
+    container_name: list-endpoints-host-db-proxy
+    network_mode: host
+    command: TCP-LISTEN:15433,fork,reuseaddr TCP:127.0.0.1:5432
+    restart: unless-stopped
+
+  web:
+    depends_on:
+      host-db-proxy:
+        condition: service_started

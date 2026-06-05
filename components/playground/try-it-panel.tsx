@@ -85,6 +85,7 @@ import { endpointKey as buildEndpointKey } from "@/shared/utils/endpoint-key";
 import { playgroundAuthApplies } from "@/lib/playground/endpoint-auth-roles";
 import { ensureFreshCredential } from "@/lib/playground/token-lifecycle";
 import { toast } from "sonner";
+import { FillFromDbButton } from "@/components/playground/fill-from-db-button";
 
 type TryItPanelProps = {
   specId: string;
@@ -636,13 +637,22 @@ export function TryItPanel({
             </SelectContent>
           </Select>
         ) : (
-          <Input
-            id={fieldId}
-            value={value}
-            onChange={(e) => setValue(e.target.value)}
-            className="h-8 font-mono text-sm"
-            placeholder={paramPlaceholderHint(p)}
-          />
+          <div className="flex gap-1 items-center">
+            <Input
+              id={fieldId}
+              value={value}
+              onChange={(e) => setValue(e.target.value)}
+              className="h-8 font-mono text-sm flex-1"
+              placeholder={paramPlaceholderHint(p)}
+            />
+            {(p.in === "path" || p.in === "query") && (
+              <FillFromDbButton
+                specId={specId}
+                paramName={p.name}
+                onApply={setValue}
+              />
+            )}
+          </div>
         )}
       </div>
     );

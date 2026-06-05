@@ -37,7 +37,7 @@ export type FlowGenerationPlan = {
 
 export type RetrievedChunk = {
   id: string;
-  chunkType: "endpoint" | "schema" | "auth";
+  chunkType: "endpoint" | "schema" | "auth" | "db_schema";
   endpointKey?: string;
   /** Primary OpenAPI tag / controller label when indexed. */
   controller?: string;

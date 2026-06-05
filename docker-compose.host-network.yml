@@ -1,0 +1,12 @@
+# Use when Ventro (or other Postgres) runs on the host at localhost:5432.
+# Container shares the host network, so 127.0.0.1 in DB_URL works as on the host.
+#
+#   docker compose -f docker-compose.yml -f docker-compose.host-network.yml up -d --build
+#
+# Set in .env: DB_CONNECT_DOCKER_HOST_REWRITE=false
+
+services:
+  web:
+    network_mode: host
+    ports: []
+    extra_hosts: []

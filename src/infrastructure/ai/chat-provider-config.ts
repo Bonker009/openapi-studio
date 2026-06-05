@@ -127,10 +127,37 @@ export function resolveChatSelection(
   return validateChatSelection({ provider, model });
 }
 
+/** Groq SDK paths include `/openai/v1/...`; AI SDK expects base URL ending in `/openai/v1`. */
+export function resolveGroqBaseUrls(envBaseUrl?: string): {
+  aiSdkBaseUrl: string;
+  groqSdkBaseUrl: string;
+} {
+  const defaultAiSdk = "https://api.groq.com/openai/v1";
+  const defaultGroqSdk = "https://api.groq.com";
+  const raw = envBaseUrl?.trim();
+  if (!raw) {
+    return { aiSdkBaseUrl: defaultAiSdk, groqSdkBaseUrl: defaultGroqSdk };
+  }
+  const normalized = raw.replace(/\/+$/, "");
+  if (normalized.endsWith("/openai/v1")) {
+    return {
+      aiSdkBaseUrl: normalized,
+      groqSdkBaseUrl: normalized.slice(0, -"/openai/v1".length) || defaultGroqSdk,
+    };
+  }
+  return {
+    aiSdkBaseUrl: `${normalized}/openai/v1`,
+    groqSdkBaseUrl: normalized,
+  };
+}
+
 export type ResolvedChatRuntimeConfig = {
   provider: AiChatProvider;
   apiKey: string;
+  /** OpenAI-compatible base URL (AI SDK / ChatOpenAI). */
   baseUrl: string;
+  /** Groq native SDK root (`https://api.groq.com`); only set for provider groq. */
+  groqSdkBaseUrl?: string;
   model: string;
   temperature: number;
   /** OpenAI Responses API; Groq uses Chat Completions. */
@@ -148,12 +175,14 @@ export function resolveChatRuntimeConfig(
     if (!apiKey) {
       throw new Error("GROQ_API_KEY is not configured");
     }
+    const { aiSdkBaseUrl, groqSdkBaseUrl } = resolveGroqBaseUrls(
+      process.env.GROQ_BASE_URL
+    );
     return {
       provider,
       apiKey,
-      baseUrl:
-        process.env.GROQ_BASE_URL?.trim() ||
-        "https://api.groq.com/openai/v1",
+      baseUrl: aiSdkBaseUrl,
+      groqSdkBaseUrl,
       model,
       temperature,
       useResponsesApi: false,

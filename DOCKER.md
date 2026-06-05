@@ -38,6 +38,12 @@ npm run dev
 | `OPENAI_CHAT_MODELS` / `GROQ_CHAT_MODELS` | Optional | Comma-separated model list for the UI selector |
 | `AI_CHAT_DEFAULT_PROVIDER` | Optional | `openai` or `groq` when both are configured |
 | `ENABLE_AI` | Optional | Set to `false` to disable AI routes |
+| `DB_CREDENTIALS_ENCRYPTION_KEY` | For DB connect | Secret for encrypting user Postgres passwords at rest |
+| `DB_AGENT_ENABLED` | Optional | Set to `false` to disable `/api/db/*` |
+| `DB_CONNECT_ALLOWED_HOSTS` | Optional | Comma-separated host allowlist for user DB connections |
+| `DB_URL` / `DB_USERNAME` / `DB_PASSWORD` | Optional | Pre-fill **Connect PostgreSQL** (`jdbc:postgresql://…` supported). In Docker, `localhost` in `DB_URL` is rewritten to `host.docker.internal`. |
+| `DB_CONNECT_EXPOSE_DEFAULTS` | Optional | Set `true` to return password from `/api/db/defaults` when `NODE_ENV=production` (e.g. local Docker) |
+| `DB_QUERY_MAX_ROWS` / `DB_INDEX_SAMPLE_ROWS` | Optional | Low-memory limits for agent queries and indexing |
 
 The `web` service loads `.env` via `env_file` and passes AI variables into the container. After changing `.env`, restart:
 
@@ -64,6 +70,42 @@ npm run db:migrate
 ```
 
 Ensure `DATABASE_URL` points at a running Postgres instance.
+
+### Docker cannot use `localhost` or your LAN IP for host Postgres
+
+From inside a **bridge** container:
+
+| You enter | What it really means | Works for Ventro on `127.0.0.1:5432`? |
+|-----------|----------------------|----------------------------------------|
+| `localhost` / `127.0.0.1` | The **container itself**, not your PC | No |
+| `192.168.x.x` (LAN IP) | Your PC, but Postgres only listens on loopback | No (unless you change Postgres `listen_addresses`) |
+| `host.docker.internal` | Docker host (`172.17.0.1`) | No if Postgres is `127.0.0.1` only |
+
+Your `ss` output shows Ventro on **`127.0.0.1:5432`** and the app DB on **`0.0.0.0:15432`** — different services.
+
+**Option A — host DB proxy (recommended for `docker compose up web`):**
+
+Forwards host `127.0.0.1:5432` → `0.0.0.0:15433` so containers can connect.
+
+```bash
+# .env: DB_CONNECT_DOCKER_PROXY_PORT=15433  (already in .env.example)
+npm run docker:app:ventro
+```
+
+Connect dialog pre-fills **`host.docker.internal:15433`** / `ventro`. Open http://localhost:3000
+
+**Option B — host network:**
+
+```bash
+# .env: DB_CONNECT_DOCKER_HOST_REWRITE=false, remove or comment DB_CONNECT_DOCKER_PROXY_PORT
+npm run docker:app:host
+```
+
+Open http://127.0.0.1:3000 — then `127.0.0.1:5432` works like on the host.
+
+**Option C — open Postgres to Docker/LAN** (`postgresql.conf` + `pg_hba.conf` for `172.17.0.0/16` or your LAN).
+
+**Option D — run on the host:** `npm run dev` and `127.0.0.1:5432`.
 
 ### Port 15432 already in use
 

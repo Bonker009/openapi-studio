@@ -351,6 +351,124 @@ export const pgOpenapiChunks = pgTable(
   ]
 );
 
+export const pgDbConnections = pgTable(
+  "db_connections",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    specId: text("spec_id")
+      .notNull()
+      .references(() => pgSpecs.id, { onDelete: "cascade" }),
+    label: text("label").notNull(),
+    host: text("host").notNull(),
+    port: integer("port").notNull().default(5432),
+    database: text("database").notNull(),
+    username: text("username").notNull(),
+    sslMode: text("ssl_mode").notNull().default("prefer"),
+    encryptedSecret: text("encrypted_secret").notNull(),
+    readOnly: boolean("read_only").notNull().default(true),
+    termsVersion: text("terms_version").notNull(),
+    acceptedAt: timestamp("accepted_at", { withTimezone: true }).notNull(),
+    status: text("status").notNull().default("pending"),
+    lastTestedAt: timestamp("last_tested_at", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => [index("db_connections_spec_idx").on(table.specId)]
+);
+
+export const pgDbSchemaSnapshots = pgTable(
+  "db_schema_snapshots",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    connectionId: uuid("connection_id")
+      .notNull()
+      .references(() => pgDbConnections.id, { onDelete: "cascade" }),
+    schemaJson: jsonb("schema_json").notNull().default({}),
+    tableCount: integer("table_count").notNull().default(0),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => [
+    index("db_schema_snapshots_connection_idx").on(table.connectionId),
+  ]
+);
+
+export const pgDbRagChunks = pgTable(
+  "db_rag_chunks",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    connectionId: uuid("connection_id")
+      .notNull()
+      .references(() => pgDbConnections.id, { onDelete: "cascade" }),
+    chunkKey: text("chunk_key").notNull(),
+    tableName: text("table_name").notNull(),
+    title: text("title").notNull(),
+    content: text("content").notNull(),
+    metadata: jsonb("metadata").notNull().default({}),
+    embeddingJson: jsonb("embedding_json"),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => [
+    uniqueIndex("db_rag_chunks_connection_chunk_key_uq").on(
+      table.connectionId,
+      table.chunkKey
+    ),
+    index("db_rag_chunks_connection_idx").on(table.connectionId),
+  ]
+);
+
+export const pgDbQueryAudit = pgTable(
+  "db_query_audit",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    connectionId: uuid("connection_id")
+      .notNull()
+      .references(() => pgDbConnections.id, { onDelete: "cascade" }),
+    sqlHash: text("sql_hash").notNull(),
+    sqlPreview: text("sql_preview").notNull(),
+    rowCount: integer("row_count"),
+    durationMs: integer("duration_ms"),
+    success: boolean("success").notNull(),
+    errorMessage: text("error_message"),
+    source: text("source").notNull().default("agent"),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => [
+    index("db_query_audit_connection_created_idx").on(
+      table.connectionId,
+      table.createdAt
+    ),
+  ]
+);
+
+export const pgDbConsentEvents = pgTable(
+  "db_consent_events",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    connectionId: uuid("connection_id").references(() => pgDbConnections.id, {
+      onDelete: "set null",
+    }),
+    specId: text("spec_id")
+      .notNull()
+      .references(() => pgSpecs.id, { onDelete: "cascade" }),
+    action: text("action").notNull(),
+    termsVersion: text("terms_version").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => [index("db_consent_events_spec_idx").on(table.specId)]
+);
+
 export const pgFlowAiCache = pgTable(
   "flow_ai_cache",
   {
