@@ -13,6 +13,7 @@ export type PersistedAiAssistantState = {
   activeTab?: string;
   chatProvider?: AiChatProvider;
   chatModel?: string;
+  connectionId?: string;
   indexResult?: IndexOpenApiResult | null;
 };
 
@@ -55,6 +56,7 @@ export function loadAiAssistantState(
       activeTab: parsed.activeTab ?? legacy?.activeTab ?? "qa",
       chatProvider: parsed.chatProvider ?? legacy?.chatProvider,
       chatModel: parsed.chatModel ?? legacy?.chatModel,
+      connectionId: parsed.connectionId ?? legacy?.connectionId,
       indexResult:
         parsed.indexResult !== undefined
           ? parsed.indexResult
@@ -77,6 +79,7 @@ export function saveAiAssistantState(
         activeTab: state.activeTab,
         chatProvider: state.chatProvider,
         chatModel: state.chatModel,
+        connectionId: state.connectionId,
         indexResult: state.indexResult,
       })
     );

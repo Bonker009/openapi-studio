@@ -44,6 +44,12 @@ npm run dev
 | `DB_URL` / `DB_USERNAME` / `DB_PASSWORD` | Optional | Pre-fill **Connect PostgreSQL** (`jdbc:postgresql://…` supported). In Docker, `localhost` in `DB_URL` is rewritten to `host.docker.internal`. |
 | `DB_CONNECT_EXPOSE_DEFAULTS` | Optional | Set `true` to return password from `/api/db/defaults` when `NODE_ENV=production` (e.g. local Docker) |
 | `DB_QUERY_MAX_ROWS` / `DB_INDEX_SAMPLE_ROWS` | Optional | Low-memory limits for agent queries and indexing |
+| `LIAM_ERD_CACHE_DIR` | Optional | Writable directory for cached Liam ERD static builds (default: `/tmp/liam-erd-cache` on Linux, `%TEMP%\liam-erd-cache` on Windows) |
+| `LIAM_ERD_ENABLED` | Optional | Set to `false` to disable ER Diagram build routes |
+| `LIAM_ERD_MAX_TABLES` | Optional | Max tables per ERD build (default 500; caps CPU/disk abuse) |
+| `LIAM_ERD_BUILD_TIMEOUT_MS` | Optional | Kill `@liam-hq/cli` after this many ms (default 120000) |
+
+For ER Diagram (`/documentation/{specId}/erd`), ensure the container can write to `LIAM_ERD_CACHE_DIR` (default `/tmp/liam-erd-cache`). In Docker you may mount a volume if you want builds to persist across restarts.
 
 The `web` service loads `.env` via `env_file` and passes AI variables into the container. After changing `.env`, restart:
 
@@ -59,6 +65,23 @@ Use `INTERNAL_APP_URL=http://127.0.0.1:3000` and `NODE_OPTIONS=--dns-result-orde
 
 ```bash
 docker compose -f docker-compose.db.yml -f docker-compose.postgres.yml up -d --build
+```
+
+### ER Diagram build fails: `Cannot find package 'commander'`
+
+Next.js `standalone` output traces `@liam-hq/cli` but not subprocess-only dependencies (including peer deps such as `react` for `ink`). The Docker build runs [`scripts/stage-liam-cli-deps.mjs`](scripts/stage-liam-cli-deps.mjs) in the `externals` stage, which performs an isolated `npm install --omit=dev` and merges the result into `node_modules/` on the runner image.
+
+Rebuild after pulling this fix:
+
+```bash
+docker compose -f docker-compose.db.yml -f docker-compose.postgres.yml up -d --build
+```
+
+Verify inside the running `web` container:
+
+```bash
+docker compose exec web ls node_modules/commander node_modules/@liam-hq/cli
+docker compose exec web node node_modules/@liam-hq/cli/dist-cli/bin/cli.js erd build --help
 ```
 
 ### Database migration failed on startup

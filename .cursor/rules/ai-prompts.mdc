@@ -1,0 +1,14 @@
+---
+description: AI prompt module conventions for unified chat and RAG
+globs: src/domain/ai/prompts/**
+alwaysApply: false
+---
+
+# AI prompt modules
+
+- Compose prompts from `prompt-sections.ts` builders (`buildGroundingRules`, `buildCitationRules`, `buildToolResultsSection`, etc.).
+- Keep task-specific logic in the matching file: `rag-query-rewrite-prompt.ts`, `tool-loop-system-prompt.ts`, `answer-synthesis-prompt.ts`.
+- Do not add long inline prompt strings in API routes or services — import builders instead.
+- Bump `PROMPT_VERSION` in `prompt-sections.ts` when changing prompt behavior that affects answers or evals.
+- Ground answers in tool evidence; instruct the model never to invent endpoints, tables, or SQL results.
+- Cap injected history and tool output via existing section helpers; do not remove truncation without reviewing token limits.

@@ -1,10 +1,17 @@
+import {
+  buildCitationRules,
+  buildConversationSection,
+  buildEndpointCatalogSection,
+  buildFollowUpResolutionRules,
+  buildGroundingRules,
+} from "@/domain/ai/prompts/prompt-sections";
+
 export function buildDocumentationPrompt(input: {
   question: string;
   allowedEndpoints: string[];
   contextBlocks: string[];
   history?: { role: "user" | "assistant"; content: string }[];
 }): string {
-  const total = input.allowedEndpoints.length;
   const hasContext = input.contextBlocks.length > 0;
   const contextSection = hasContext
     ? [
@@ -17,38 +24,14 @@ export function buildDocumentationPrompt(input: {
         "Answer from the full endpoint list when possible, or explain what is missing.",
       ];
 
-  const conversationSection = (input.history ?? []).length
-    ? [
-        "Conversation so far (most recent first):",
-        ...(input.history ?? [])
-          .slice(-12)
-          .map((m) => `- ${m.role}: ${m.content.slice(0, 500)}`),
-        "Use this conversation to resolve references like 'that body' or 'the previous endpoint'.",
-        "",
-      ]
-    : [];
-
   return [
     "You are an OpenAPI documentation assistant.",
-    "Ground answers in the authoritative endpoint list and retrieved evidence below.",
-    "Never invent endpoints, fields, or auth requirements not present in this prompt.",
-    "Cite endpoints as METHOD /path when relevant.",
-    "",
-    "When evidence is partial or ambiguous:",
-    "- Give your best-supported answer and state confidence (high/medium/low).",
-    "- Offer 1–2 plausible alternatives if multiple endpoints could match.",
-    "- Do not reply with only \"cannot find\" if the endpoint list or evidence gives a reasonable best guess.",
-    "",
-    `This spec has exactly ${total} endpoint${total === 1 ? "" : "s"}.`,
-    "The list under \"All endpoints\" is the COMPLETE, authoritative set of every",
-    "endpoint in this spec. For counting, listing, grouping, or \"how many\" questions,",
-    "use that full list (not only the retrieved evidence section).",
-    "",
-    ...conversationSection,
+    ...buildGroundingRules(),
+    ...buildCitationRules(),
+    ...buildFollowUpResolutionRules(),
+    ...buildEndpointCatalogSection(input.allowedEndpoints),
+    ...buildConversationSection(input.history),
     `Question: ${input.question}`,
-    "",
-    `All endpoints (${total} total, authoritative):`,
-    ...input.allowedEndpoints.map((e) => `- ${e}`),
     "",
     ...contextSection,
   ].join("\n");

@@ -5,7 +5,7 @@ import { DbRetriever } from "@/infrastructure/ai/rag/db-retriever";
 import { OpenApiRetriever } from "@/infrastructure/ai/rag/openapi-retriever";
 import { chunksToContextBlocks } from "@/domain/ai/pipeline/context-format";
 import {
-  executeReadOnlyQuery,
+  executeAgentReadOnlyQuery,
   type UserDbConnectionRow,
 } from "@/infrastructure/db/postgres-user-client";
 import { hashSqlPreview } from "@/domain/db/sanitize-sql";
@@ -72,7 +72,10 @@ export function createDbAgentTools(input: {
       const started = Date.now();
       const sqlHash = createHash("sha256").update(query).digest("hex").slice(0, 16);
       try {
-        const result = await executeReadOnlyQuery(input.connectionRow, query);
+        const result = await executeAgentReadOnlyQuery(
+          input.connectionRow,
+          query
+        );
         await postgresDbRagRepository.recordQueryAudit({
           connectionId: input.connectionRow.id,
           sqlHash,
@@ -121,6 +124,6 @@ export function createDbAgentTools(input: {
 export const DB_AGENT_SYSTEM_PROMPT = `You are a PostgreSQL-aware API testing assistant.
 - Use retrieve_context and list_tables before guessing schema.
 - Only PostgreSQL syntax. Use double-quoted identifiers when needed.
-- Only read-only SELECT queries via execute_readonly_sql. Always include LIMIT (small).
+- Only read-only SELECT queries via execute_readonly_sql. No forced small LIMIT; results may be truncated by server byte cap.
 - Ground answers in tool results and retrieved context. Say when unsure.
 - Never ask for or reveal database passwords.`;

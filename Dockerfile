@@ -15,6 +15,7 @@ RUN npm run build
 
 FROM builder AS externals
 RUN mkdir -p /opt/externals \
+  && node /app/scripts/stage-liam-cli-deps.mjs /opt/externals \
   && cd /app/node_modules \
   && for pkg in pg pg-pool pg-protocol pg-types pg-connection-string pg-int8 postgres-array postgres-bytea postgres-date postgres-interval xtend; do \
        if [ -d "$pkg" ]; then cp -a "$pkg" "/opt/externals/$pkg"; fi; \

@@ -2,10 +2,13 @@ import { Client, type ClientConfig } from "pg";
 import { parse as parseConnectionString } from "pg-connection-string";
 import { pgDbConnections } from "@/infrastructure/database/pg-flow-schema";
 import { decryptSecret } from "@/infrastructure/db/credential-crypto";
-import { dbConnectAllowedHosts, dbQueryTimeoutMs } from "@/domain/db/config";
 import {
+  aiDbQueryHardMaxRows,
+  aiDbQueryInjectLimit,
+  dbConnectAllowedHosts,
   dbQueryMaxResponseBytes,
   dbQueryMaxRows,
+  dbQueryTimeoutMs,
 } from "@/domain/db/config";
 import { sanitizeReadOnlySql } from "@/domain/db/sanitize-sql";
 
@@ -72,34 +75,98 @@ export async function testUserDbConnection(
   });
 }
 
+export type ReadOnlyQueryResult = {
+  rows: Record<string, unknown>[];
+  rowCount: number;
+  sql: string;
+  truncated?: boolean;
+  totalFetched?: number;
+  note?: string;
+};
+
+function trimRowsToByteCap(
+  rows: Record<string, unknown>[],
+  maxBytes: number
+): { rows: Record<string, unknown>[]; truncated: boolean; totalFetched: number } {
+  let json = JSON.stringify(rows);
+  if (Buffer.byteLength(json, "utf8") <= maxBytes) {
+    return { rows, truncated: false, totalFetched: rows.length };
+  }
+  const trimmed: Record<string, unknown>[] = [];
+  for (const r of rows) {
+    trimmed.push(r);
+    json = JSON.stringify(trimmed);
+    if (Buffer.byteLength(json, "utf8") > maxBytes) {
+      trimmed.pop();
+      break;
+    }
+  }
+  return { rows: trimmed, truncated: true, totalFetched: rows.length };
+}
+
 export async function executeReadOnlyQuery(
   row: UserDbConnectionRow,
   rawSql: string,
-  options?: { maxRows?: number; allowedTables?: string[] }
-): Promise<{ rows: Record<string, unknown>[]; rowCount: number; sql: string }> {
+  options?: { maxRows?: number; allowedTables?: string[]; injectLimit?: boolean }
+): Promise<ReadOnlyQueryResult> {
   const sql = sanitizeReadOnlySql(rawSql, {
     maxRows: options?.maxRows ?? dbQueryMaxRows(),
     allowedTables: options?.allowedTables,
+    injectLimit: options?.injectLimit,
   });
 
   return withUserDbClient(row, async (client) => {
     const result = await client.query(sql);
     const rows = (result.rows ?? []) as Record<string, unknown>[];
-    let json = JSON.stringify(rows);
     const maxBytes = dbQueryMaxResponseBytes();
-    if (Buffer.byteLength(json, "utf8") > maxBytes) {
-      const trimmed: Record<string, unknown>[] = [];
-      for (const r of rows) {
-        trimmed.push(r);
-        json = JSON.stringify(trimmed);
-        if (Buffer.byteLength(json, "utf8") > maxBytes) {
-          trimmed.pop();
-          break;
-        }
-      }
-      return { rows: trimmed, rowCount: trimmed.length, sql };
+    const capped = trimRowsToByteCap(rows, maxBytes);
+    return {
+      rows: capped.rows,
+      rowCount: capped.rows.length,
+      sql,
+      truncated: capped.truncated,
+      totalFetched: capped.totalFetched,
+      note: capped.truncated
+        ? "Response trimmed to fit byte limit; not all rows included."
+        : undefined,
+    };
+  });
+}
+
+/** Agent chat SQL: no auto LIMIT unless query includes one; optional hard max rows. */
+export async function executeAgentReadOnlyQuery(
+  row: UserDbConnectionRow,
+  rawSql: string,
+  options?: { allowedTables?: string[] }
+): Promise<ReadOnlyQueryResult> {
+  const hardMax = aiDbQueryHardMaxRows();
+  const injectLimit = aiDbQueryInjectLimit();
+  const sql = sanitizeReadOnlySql(rawSql, {
+    maxRows: hardMax > 0 ? hardMax : dbQueryMaxRows(),
+    allowedTables: options?.allowedTables,
+    injectLimit,
+  });
+
+  return withUserDbClient(row, async (client) => {
+    const result = await client.query(sql);
+    let rows = (result.rows ?? []) as Record<string, unknown>[];
+    if (hardMax > 0 && rows.length > hardMax) {
+      rows = rows.slice(0, hardMax);
     }
-    return { rows, rowCount: rows.length, sql };
+    const maxBytes = dbQueryMaxResponseBytes();
+    const capped = trimRowsToByteCap(rows, maxBytes);
+    return {
+      rows: capped.rows,
+      rowCount: capped.rows.length,
+      sql,
+      truncated: capped.truncated || (hardMax > 0 && capped.totalFetched > hardMax),
+      totalFetched: capped.totalFetched,
+      note: capped.truncated
+        ? "Response trimmed to fit byte limit; not all rows included."
+        : hardMax > 0 && capped.totalFetched > hardMax
+          ? `Hard row cap ${hardMax} applied.`
+          : undefined,
+    };
   });
 }
 

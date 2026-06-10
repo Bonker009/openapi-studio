@@ -1,0 +1,16 @@
+---
+description: Database and ERD API route conventions
+globs: app/api/db/**,src/features/db/**,src/domain/db/**
+alwaysApply: false
+---
+
+# Database API conventions
+
+- Every `app/api/db/*` handler must call `guardDbRoute(request)` first.
+- Require `specId` and validate with `validateSpecId()` from `lib/spec-id`.
+- Scope connections with `postgresDbConnectionRepository.findForSpec(specId, connectionId)` — never trust `connectionId` alone.
+- User SQL must go through `sanitizeReadOnlySql` or `executeAgentReadOnlyQuery`; agent path defaults to no auto `LIMIT` (`AI_DB_QUERY_INJECT_LIMIT=false`).
+- Paste ERD: `POST /api/db/erd/build?specId=` with `{ schema, format }`; validate via `erd-paste-schema.ts` before Liam CLI.
+- Legacy connection ERD builds use schema snapshots only — not live DB introspection at diagram time.
+- ERD asset routes: hex `cacheKey` + allowlisted extensions (`erd-security.ts`); connection routes also require UUID `connectionId`.
+- Do not expose decrypted DB passwords in API responses or logs.

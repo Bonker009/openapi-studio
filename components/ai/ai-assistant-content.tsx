@@ -1,14 +1,15 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState, useCallback } from "react";
-import { Loader2, RefreshCw, Square } from "lucide-react";
+import { Check, Copy, Loader2, RefreshCw, Square } from "lucide-react";
 import type {
   GenerateFlowOutput,
   IndexOpenApiResult,
 } from "@/domain/ai/types";
 import type { Flow } from "@/domain/flows/types";
 import { postJson } from "@/components/ai/ai-api-client";
-import { streamQuestionRequest } from "@/components/ai/stream-question-client";
+import { streamUnifiedChatRequest } from "@/components/ai/stream-unified-chat-client";
+import type { DbConnectionPublic } from "@/domain/db/types";
 import { AiChatMarkdown } from "@/components/ai/ai-chat-markdown";
 import {
   AiChatComposerStatus,
@@ -56,6 +57,31 @@ type ChatMessage = PersistedChatMessage & {
   streaming?: boolean;
 };
 
+function MessageCopyButton({ content }: { content: string }) {
+  const [copied, setCopied] = useState(false);
+  return (
+    <Button
+      type="button"
+      variant="ghost"
+      size="icon"
+      className="absolute top-1 right-1 h-7 w-7 opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 transition-opacity"
+      aria-label="Copy message"
+      onClick={() => {
+        void navigator.clipboard.writeText(content).then(() => {
+          setCopied(true);
+          setTimeout(() => setCopied(false), 1500);
+        });
+      }}
+    >
+      {copied ? (
+        <Check className="h-3.5 w-3.5 text-success" />
+      ) : (
+        <Copy className="h-3.5 w-3.5" />
+      )}
+    </Button>
+  );
+}
+
 export function AiAssistantContent({
   specId,
   defaultBaseUrl,
@@ -98,6 +124,10 @@ export function AiAssistantContent({
   const [chatSettings, setChatSettings] = useState<AiChatSettings | null>(
     null
   );
+  const [connectionId, setConnectionId] = useState(
+    () => initialPersisted.connectionId ?? ""
+  );
+  const [dbConnections, setDbConnections] = useState<DbConnectionPublic[]>([]);
   const chatScrollRef = useRef<HTMLDivElement>(null);
   const abortRef = useRef<AbortController | null>(null);
 
@@ -112,9 +142,10 @@ export function AiAssistantContent({
       activeTab,
       chatProvider: chatSettings?.provider,
       chatModel: chatSettings?.model,
+      connectionId: connectionId || undefined,
       indexResult,
     });
-  }, [specId, chatMessages, activeTab, chatSettings, indexResult]);
+  }, [specId, chatMessages, activeTab, chatSettings, connectionId, indexResult]);
 
   useEffect(() => {
     if (defaultBaseUrl) setBaseUrl(defaultBaseUrl);
@@ -125,6 +156,29 @@ export function AiAssistantContent({
     setChatMessages(stored.messages);
     setIndexResult(stored.indexResult ?? null);
     setActiveTab(stored.activeTab ?? "qa");
+    setConnectionId(stored.connectionId ?? "");
+  }, [specId]);
+
+  useEffect(() => {
+    let cancelled = false;
+    void (async () => {
+      try {
+        const res = await fetch(
+          `/api/db/connections?specId=${encodeURIComponent(specId)}`
+        );
+        if (!res.ok || cancelled) return;
+        const data = await res.json();
+        if (cancelled) return;
+        const list = (data.connections ?? []) as DbConnectionPublic[];
+        setDbConnections(list);
+        setConnectionId((prev) => prev || list[0]?.id || "");
+      } catch {
+        // ignore
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
   }, [specId]);
 
   useEffect(() => {
@@ -183,10 +237,11 @@ export function AiAssistantContent({
         activeTab,
         chatProvider: chatSettings?.provider,
         chatModel: chatSettings?.model,
+        connectionId: connectionId || undefined,
         indexResult,
       });
     };
-  }, [specId, chatMessages, activeTab, chatSettings, indexResult]);
+  }, [specId, chatMessages, activeTab, chatSettings, connectionId, indexResult]);
 
   const activeProviderEntry = useMemo(() => {
     if (!chatCatalog || !chatSettings) return null;
@@ -303,10 +358,11 @@ export function AiAssistantContent({
     const ac = new AbortController();
     abortRef.current = ac;
 
-    await streamQuestionRequest(
+    await streamUnifiedChatRequest(
       {
         specId,
         question: q,
+        connectionId: connectionId || undefined,
         signal: ac.signal,
         chatProvider: chatSettings.provider,
         chatModel: chatSettings.model,
@@ -315,11 +371,13 @@ export function AiAssistantContent({
       {
         onOpen: () => {
           setStreamPhase((prev) =>
-            prev === "connecting" ? "retrieving" : prev
+            prev === "connecting" ? "thinking" : prev
           );
         },
         onStatus: (phase) => {
-          setStreamPhase(phase);
+          setStreamPhase(
+            phase === "generating" ? "streaming" : (phase as AiStreamPhase)
+          );
         },
         onDelta: (text) => {
           setChatStatus("streaming");
@@ -395,7 +453,7 @@ export function AiAssistantContent({
       >
         <TabsList className="w-full shrink-0">
           <TabsTrigger value="qa" className="flex-1">
-            Ask Docs
+            Chat
           </TabsTrigger>
           <TabsTrigger value="flow" className="flex-1">
             Generate Flow
@@ -410,7 +468,7 @@ export function AiAssistantContent({
 
         <TabsContent
           value="qa"
-          className="mt-3 flex flex-col flex-1 min-h-0 data-[state=inactive]:hidden"
+          className="mt-3 flex flex-col flex-1 min-h-0 min-w-0 data-[state=inactive]:hidden"
         >
           <div
             ref={chatScrollRef}
@@ -418,10 +476,10 @@ export function AiAssistantContent({
           >
             {chatMessages.length === 0 ? (
               <div className="text-center py-10 px-4 space-y-2">
-                <p className="text-sm font-medium">Ask about this API</p>
+                <p className="text-sm font-medium">Ask about this API and database</p>
                 <p className="text-sm text-muted-foreground">
-                  Auth, payloads, responses, or endpoint behavior. Index the spec
-                  first for best results.
+                  The assistant will search your spec and connected database as
+                  needed. Index OpenAPI and database schema first for best results.
                 </p>
               </div>
             ) : (
@@ -439,7 +497,7 @@ export function AiAssistantContent({
                 <div
                   key={msg.id}
                   className={cn(
-                    "rounded-lg px-3 py-2.5 text-sm max-w-[92%] transition-shadow duration-200",
+                    "group relative rounded-lg px-3 py-2.5 text-sm max-w-[92%] lg:max-w-[95%] transition-shadow duration-200",
                     msg.role === "user" &&
                       "ml-auto bg-primary text-primary-foreground",
                     msg.role === "assistant" &&
@@ -450,6 +508,9 @@ export function AiAssistantContent({
                       "mr-auto bg-destructive/10 text-destructive border border-destructive/30"
                   )}
                 >
+                  {!msg.streaming && msg.content.trim() ? (
+                    <MessageCopyButton content={msg.content} />
+                  ) : null}
                   {msg.role === "assistant" ? (
                     <div className="min-w-0 min-h-[1.25rem]">
                       {showTyping ? (
@@ -457,11 +518,21 @@ export function AiAssistantContent({
                           label={
                             streamPhase === "connecting"
                               ? "Connecting…"
-                              : streamPhase === "retrieving"
-                                ? "Searching spec…"
-                                : streamPhase === "generating"
-                                  ? "Thinking…"
-                                  : "Writing…"
+                              : streamPhase === "planning-search"
+                                ? "Planning search…"
+                                : streamPhase === "searching-api"
+                                  ? "Searching API docs…"
+                                  : streamPhase === "searching-db"
+                                    ? "Searching database…"
+                                    : streamPhase === "running-sql"
+                                      ? "Running SQL…"
+                                      : streamPhase === "thinking"
+                                        ? "Thinking…"
+                                        : streamPhase === "retrieving"
+                                          ? "Searching spec…"
+                                          : streamPhase === "generating"
+                                            ? "Preparing answer…"
+                                            : "Writing…"
                           }
                         />
                       ) : null}
@@ -546,6 +617,42 @@ export function AiAssistantContent({
                 {chatCatalog.disabledReason ?? "AI chat is not configured."}
               </p>
             ) : null}
+            {chatCatalog?.taskModels ? (
+              <p className="text-[10px] text-muted-foreground leading-snug">
+                {chatCatalog.taskModels.ragQuery
+                  ? `Retrieval: ${formatChatModelLabel(chatCatalog.taskModels.ragQuery.provider, chatCatalog.taskModels.ragQuery.model)}`
+                  : "Retrieval: question as-is"}
+                {" · "}
+                Tools:{" "}
+                {formatChatModelLabel(
+                  chatCatalog.taskModels.toolLoop.provider,
+                  chatCatalog.taskModels.toolLoop.model
+                )}
+              </p>
+            ) : null}
+            {dbConnections.length > 0 ? (
+              <Select
+                value={connectionId || "__none__"}
+                onValueChange={(v) =>
+                  setConnectionId(v === "__none__" ? "" : v)
+                }
+                disabled={asking}
+              >
+                <SelectTrigger size="sm" className="h-8 w-full">
+                  <SelectValue placeholder="Database (optional)" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="__none__">API only (no database)</SelectItem>
+                  {dbConnections.map((c) => (
+                    <SelectItem key={c.id} value={c.id}>
+                      {c.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            ) : (
+              <p className="text-[10px] text-muted-foreground">API only — connect a database in the Database tab</p>
+            )}
             {asking ? <AiChatComposerStatus phase={streamPhase} /> : null}
             <Textarea
               value={question}
@@ -553,7 +660,7 @@ export function AiAssistantContent({
               placeholder={
                 asking
                   ? "Waiting for response…"
-                  : "Ask a documentation question…"
+                  : "Ask about endpoints, schema, or test data…"
               }
               className={cn(
                 "min-h-11 max-h-28 resize-none",
@@ -682,13 +789,17 @@ export function AiAssistantContent({
           ) : null}
         </TabsContent>
 
-        <TabsContent value="database" className="mt-3 space-y-3">
-          <DbAssistantPanel specId={specId} />
+        <TabsContent value="database" className="mt-3 space-y-3 min-w-0">
+          <DbAssistantPanel
+            specId={specId}
+            connectionId={connectionId}
+            onConnectionIdChange={setConnectionId}
+          />
         </TabsContent>
 
         <TabsContent value="index" className="mt-3 space-y-3">
           <p className="text-sm text-muted-foreground">
-            Build embeddings and endpoint index. Required before Ask Docs and
+            Build embeddings and endpoint index. Required before Chat and
             Generate Flow work reliably.
           </p>
           <Button onClick={() => void handleIndexOpenApi()} disabled={indexing}>

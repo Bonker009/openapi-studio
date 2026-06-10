@@ -60,3 +60,35 @@ export function dbFillPageSize(): number {
   const n = Number(process.env.DB_FILL_PAGE_SIZE ?? 10);
   return Number.isFinite(n) ? Math.min(50, Math.max(1, n)) : 10;
 }
+
+/** When false, agent SQL path does not auto-append LIMIT (see executeAgentReadOnlyQuery). */
+export function aiDbQueryInjectLimit(): boolean {
+  const raw = process.env.AI_DB_QUERY_INJECT_LIMIT?.trim().toLowerCase();
+  if (raw === "true" || raw === "1") return true;
+  if (raw === "false" || raw === "0") return false;
+  return false;
+}
+
+/** Optional hard row ceiling for agent queries; 0 = disabled. */
+export function aiDbQueryHardMaxRows(): number {
+  const n = Number(process.env.AI_DB_QUERY_HARD_MAX_ROWS ?? 0);
+  if (!Number.isFinite(n) || n <= 0) return 0;
+  return Math.min(100_000, Math.max(1, Math.floor(n)));
+}
+
+export function unifiedAgentMaxSteps(): number {
+  const n = Number(process.env.UNIFIED_AGENT_MAX_STEPS ?? 8);
+  return Number.isFinite(n) ? Math.min(16, Math.max(1, Math.floor(n))) : 8;
+}
+
+export function liamErdEnabled(): boolean {
+  return process.env.LIAM_ERD_ENABLED !== "false";
+}
+
+export function liamErdCacheDir(): string {
+  const raw = process.env.LIAM_ERD_CACHE_DIR?.trim();
+  if (raw) return raw;
+  return process.platform === "win32"
+    ? `${process.env.TEMP ?? "C:\\Temp"}\\liam-erd-cache`
+    : "/tmp/liam-erd-cache";
+}

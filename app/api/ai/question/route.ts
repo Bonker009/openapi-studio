@@ -1,9 +1,6 @@
 import { type NextRequest, NextResponse } from "next/server";
-import {
-  aiFlowService,
-  isAiModuleEnabled,
-} from "@/features/ai/ai-flow-service";
-import { streamOpenApiQuestion } from "@/domain/ai/pipeline/answer-question-stream";
+import { streamUnifiedChat } from "@/features/ai/unified-assistant-service";
+import { isAiModuleEnabled } from "@/features/ai/ai-flow-service";
 import { parseChatSelectionFromBody } from "@/lib/ai/chat-selection";
 import { guardAiRoute, readAiJsonBody } from "@/lib/ai/route-helpers";
 import { validateSpecId } from "@/lib/spec-id";
@@ -12,7 +9,6 @@ import type { QAHistoryMessage } from "@/domain/ai/types";
 function sseEncode(event: string, data: Record<string, unknown>): string {
   return `event: ${event}\ndata: ${JSON.stringify(data)}\n\n`;
 }
-
 
 function sanitizeHistory(input: unknown): QAHistoryMessage[] {
   if (!Array.isArray(input)) return [];
@@ -45,6 +41,7 @@ export async function POST(request: NextRequest) {
     provider?: string;
     model?: string;
     history?: unknown;
+    connectionId?: string;
   }>(request);
   if (body instanceof NextResponse) return body;
 
@@ -79,51 +76,38 @@ export async function POST(request: NextRequest) {
   }
 
   const history = sanitizeHistory(body.history);
+  const connectionId = body.connectionId?.trim() || undefined;
 
-  const qaBase = {
+  const chatInput = {
     specId,
     question: question.slice(0, 4000),
-    conversationId: body.conversationId,
+    history,
+    connectionId,
     chatProvider: chatSelection?.provider,
     chatModel: chatSelection?.model,
-    history,
   };
 
   if (body.stream) {
     const encoder = new TextEncoder();
     const stream = new ReadableStream({
       start(controller) {
-        void streamOpenApiQuestion(
-          qaBase,
-          {
-            onStatus: (phase) => {
-              controller.enqueue(
-                encoder.encode(sseEncode("status", { phase }))
-              );
-            },
-            onDelta: (text) => {
-              controller.enqueue(
-                encoder.encode(sseEncode("delta", { text }))
-              );
-            },
-            onDone: (result) => {
-              controller.enqueue(encoder.encode(sseEncode("done", result)));
-              controller.close();
-            },
-            onError: (message) => {
-              controller.enqueue(
-                encoder.encode(sseEncode("error", { error: message }))
-              );
-              controller.close();
-            },
-          }
-        ).catch((error) => {
-          const message =
-            error instanceof Error ? error.message : "Internal Server Error";
-          controller.enqueue(
-            encoder.encode(sseEncode("error", { error: message }))
-          );
-          controller.close();
+        void streamUnifiedChat(chatInput, {
+          onStatus: (phase) => {
+            controller.enqueue(encoder.encode(sseEncode("status", { phase })));
+          },
+          onDelta: (text) => {
+            controller.enqueue(encoder.encode(sseEncode("delta", { text })));
+          },
+          onDone: (result) => {
+            controller.enqueue(encoder.encode(sseEncode("done", result)));
+            controller.close();
+          },
+          onError: (message) => {
+            controller.enqueue(
+              encoder.encode(sseEncode("error", { error: message }))
+            );
+            controller.close();
+          },
         });
       },
     });
@@ -138,8 +122,27 @@ export async function POST(request: NextRequest) {
   }
 
   try {
-    const result = await aiFlowService.answerQuestion(qaBase);
-    return NextResponse.json(result);
+    let answer = "";
+    let citedEndpoints: string[] = [];
+    let extra: Record<string, unknown> = {};
+    await streamUnifiedChat(chatInput, {
+      onDelta: (t) => {
+        answer += t;
+      },
+      onDone: (result) => {
+        answer = result.answer;
+        citedEndpoints = result.citedEndpoints;
+        extra = {
+          toolsUsed: result.toolsUsed,
+          modelsUsed: result.modelsUsed,
+          promptVersion: result.promptVersion,
+        };
+      },
+      onError: (message) => {
+        throw new Error(message);
+      },
+    });
+    return NextResponse.json({ answer, citedEndpoints, ...extra });
   } catch (error) {
     console.error("POST /api/ai/question:", error);
     const message = error instanceof Error ? error.message : "Internal Server Error";

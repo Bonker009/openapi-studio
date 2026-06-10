@@ -7,7 +7,7 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint .",
-    "test": "tsx --test lib/openapi-diff.test.ts lib/playground/generate-sample.test.ts lib/playground/request-body.test.ts lib/playground/build-form-data.test.ts lib/validation/pass-policy.test.ts lib/validation/overrides.test.ts lib/validation/case-builder.test.ts lib/flows/run-flow.test.ts lib/flows/conditional-step.test.ts src/infrastructure/flows/flow-persistence-service.test.ts src/domain/ai/validation/flow-schema-validator.test.ts src/infrastructure/ai/rag/openapi-chunker.test.ts src/infrastructure/ai/rag/openapi-retriever.test.ts src/infrastructure/ai/chat-provider-config.test.ts src/domain/ai/adapters/flow-contract-adapter.test.ts src/infrastructure/ai/rag/embedding-math.test.ts src/domain/ai/pipeline/plan-parser.test.ts src/domain/ai/pipeline/auto-fix-loop.test.ts src/domain/ai/pipeline/cache-key.test.ts src/domain/ai/validation/extract-citations.test.ts src/domain/db/sanitize-sql.test.ts src/domain/db/resolve-connect-env.test.ts",
+    "test": "tsx --test lib/openapi-diff.test.ts lib/playground/generate-sample.test.ts lib/playground/request-body.test.ts lib/playground/build-form-data.test.ts lib/validation/pass-policy.test.ts lib/validation/overrides.test.ts lib/validation/case-builder.test.ts lib/flows/run-flow.test.ts lib/flows/conditional-step.test.ts src/infrastructure/flows/flow-persistence-service.test.ts src/domain/ai/validation/flow-schema-validator.test.ts src/infrastructure/ai/rag/openapi-chunker.test.ts src/infrastructure/ai/rag/openapi-retriever.test.ts src/infrastructure/ai/chat-provider-config.test.ts src/domain/ai/adapters/flow-contract-adapter.test.ts src/infrastructure/ai/rag/embedding-math.test.ts src/domain/ai/pipeline/plan-parser.test.ts src/domain/ai/pipeline/auto-fix-loop.test.ts src/domain/ai/pipeline/cache-key.test.ts src/domain/ai/validation/extract-citations.test.ts src/domain/db/sanitize-sql.test.ts src/domain/db/resolve-connect-env.test.ts lib/ai/prompt-sections.test.ts lib/ai/model-task-routing.test.ts lib/ai/unified-assistant-tools.test.ts lib/ai/unified-assistant-service.test.ts lib/db/agent-sql-policy.test.ts lib/db/db-browse-service.test.ts lib/db/snapshot-to-pgsql.test.ts lib/db/liam-erd-service.test.ts lib/db/erd-security.test.ts lib/db/erd-paste-schema.test.ts lib/db/stage-liam-cli-deps.test.ts",
     "db:generate": "drizzle-kit generate --config drizzle.pg.config.ts",
     "db:migrate": "node --env-file=.env --import tsx scripts/run-migrate-pg.ts",
     "docker:db": "docker compose -f docker-compose.db.yml up -d",
@@ -21,7 +21,9 @@
     "@ai-sdk/openai": "^3.0.67",
     "@codemirror/autocomplete": "^6.20.2",
     "@codemirror/commands": "^6.10.3",
+    "@codemirror/lang-javascript": "^6.2.5",
     "@codemirror/lang-json": "^6.0.2",
+    "@codemirror/lang-sql": "^6.10.0",
     "@codemirror/language": "^6.12.3",
     "@codemirror/view": "^6.43.0",
     "@hookform/resolvers": "^5.2.2",
@@ -31,6 +33,7 @@
     "@langchain/langgraph": "^1.3.4",
     "@langchain/langgraph-checkpoint-postgres": "^1.0.2",
     "@langchain/openai": "^1.4.7",
+    "@liam-hq/cli": "^0.7.24",
     "@radix-ui/react-accordion": "^1.2.12",
     "@radix-ui/react-checkbox": "^1.3.3",
     "@radix-ui/react-collapsible": "^1.1.12",
@@ -76,7 +79,9 @@
   },
   "overrides": {
     "postcss": "^8.5.10",
-    "uuid": "^11.1.1"
+    "uuid": "^11.1.1",
+    "valibot": "^1.2.0",
+    "tmp": "^0.2.7"
   },
   "devDependencies": {
     "@emnapi/core": "^1.10.0",

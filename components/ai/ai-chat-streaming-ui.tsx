@@ -6,6 +6,11 @@ import { cn } from "@/lib/utils";
 export type AiStreamPhase =
   | "idle"
   | "connecting"
+  | "thinking"
+  | "planning-search"
+  | "searching-api"
+  | "searching-db"
+  | "running-sql"
   | "retrieving"
   | "generating"
   | "streaming";
@@ -14,6 +19,16 @@ export function streamPhaseLabel(phase: AiStreamPhase): string {
   switch (phase) {
     case "connecting":
       return "Connecting to AI…";
+    case "thinking":
+      return "Thinking…";
+    case "planning-search":
+      return "Planning search…";
+    case "searching-api":
+      return "Searching API docs…";
+    case "searching-db":
+      return "Searching database schema…";
+    case "running-sql":
+      return "Running SQL…";
     case "retrieving":
       return "Searching your OpenAPI spec…";
     case "generating":

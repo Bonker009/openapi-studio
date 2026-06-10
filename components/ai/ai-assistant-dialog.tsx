@@ -28,7 +28,7 @@ export function AiAssistantDialog({
 }: AiAssistantDialogProps) {
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-2xl max-h-[min(90vh,800px)] flex flex-col gap-0 p-0 overflow-hidden">
+      <DialogContent className="sm:max-w-3xl lg:max-w-4xl max-h-[min(90vh,800px)] flex flex-col gap-0 p-0 overflow-hidden">
         <DialogHeader className="px-6 pt-6 pb-2 shrink-0">
           <DialogTitle className="flex items-center gap-2">
             <Sparkles className="h-5 w-5 text-primary" />

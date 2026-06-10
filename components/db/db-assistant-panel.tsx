@@ -11,24 +11,29 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Textarea } from "@/components/ui/textarea";
 import { ConnectDbDialog } from "@/components/db/connect-db-dialog";
+import { DbTableBrowser } from "@/components/db/db-table-browser";
 import { toast } from "sonner";
 import type { DbConnectionPublic } from "@/domain/db/types";
 
 type DbAssistantPanelProps = {
   specId: string;
+  /** Optional controlled connection (sync with chat composer). */
+  connectionId?: string;
+  onConnectionIdChange?: (id: string) => void;
 };
 
-export function DbAssistantPanel({ specId }: DbAssistantPanelProps) {
+export function DbAssistantPanel({
+  specId,
+  connectionId: controlledId,
+  onConnectionIdChange,
+}: DbAssistantPanelProps) {
   const [connections, setConnections] = useState<DbConnectionPublic[]>([]);
-  const [connectionId, setConnectionId] = useState<string>("");
+  const [connectionId, setConnectionId] = useState(controlledId ?? "");
   const [connectOpen, setConnectOpen] = useState(false);
   const [indexing, setIndexing] = useState(false);
-  const [question, setQuestion] = useState("");
-  const [answer, setAnswer] = useState("");
-  const [loading, setLoading] = useState(false);
-  const [conversationId, setConversationId] = useState<string | undefined>();
+
+  const activeId = controlledId ?? connectionId;
 
   const loadConnections = useCallback(async () => {
     try {
@@ -36,24 +41,30 @@ export function DbAssistantPanel({ specId }: DbAssistantPanelProps) {
       const data = await res.json();
       if (!res.ok) throw new Error(data.error);
       setConnections(data.connections ?? []);
-      if (data.connections?.[0] && !connectionId) {
-        setConnectionId(data.connections[0].id);
+      if (data.connections?.[0] && !activeId) {
+        const id = data.connections[0].id as string;
+        setConnectionId(id);
+        onConnectionIdChange?.(id);
       }
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Failed to load connections");
     }
-  }, [specId, connectionId]);
+  }, [specId, activeId, onConnectionIdChange]);
 
   useEffect(() => {
     void loadConnections();
   }, [loadConnections]);
 
+  useEffect(() => {
+    if (controlledId) setConnectionId(controlledId);
+  }, [controlledId]);
+
   const handleIndex = async () => {
-    if (!connectionId) return;
+    if (!activeId) return;
     setIndexing(true);
     try {
       const intro = await fetch(
-        `/api/db/connections/${connectionId}/introspect?specId=${encodeURIComponent(specId)}`,
+        `/api/db/connections/${activeId}/introspect?specId=${encodeURIComponent(specId)}`,
         { method: "POST" }
       );
       if (!intro.ok) {
@@ -63,7 +74,7 @@ export function DbAssistantPanel({ specId }: DbAssistantPanelProps) {
       const res = await fetch("/api/db/index", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ specId, connectionId }),
+        body: JSON.stringify({ specId, connectionId: activeId }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error);
@@ -76,37 +87,11 @@ export function DbAssistantPanel({ specId }: DbAssistantPanelProps) {
     }
   };
 
-  const handleAsk = async () => {
-    if (!connectionId || !question.trim()) return;
-    setLoading(true);
-    setAnswer("");
-    try {
-      const res = await fetch("/api/db/agent", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          specId,
-          connectionId,
-          question: question.trim(),
-          conversationId,
-        }),
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error);
-      setAnswer(data.answer ?? "");
-      if (data.conversationId) setConversationId(data.conversationId);
-    } catch (e) {
-      toast.error(e instanceof Error ? e.message : "Question failed");
-    } finally {
-      setLoading(false);
-    }
-  };
-
   const handleDelete = async () => {
-    if (!connectionId) return;
+    if (!activeId) return;
     try {
       const res = await fetch(
-        `/api/db/connections/${connectionId}?specId=${encodeURIComponent(specId)}`,
+        `/api/db/connections/${activeId}?specId=${encodeURIComponent(specId)}`,
         { method: "DELETE" }
       );
       if (!res.ok) {
@@ -115,6 +100,7 @@ export function DbAssistantPanel({ specId }: DbAssistantPanelProps) {
       }
       toast.success("Connection removed");
       setConnectionId("");
+      onConnectionIdChange?.("");
       void loadConnections();
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Delete failed");
@@ -122,68 +108,74 @@ export function DbAssistantPanel({ specId }: DbAssistantPanelProps) {
   };
 
   return (
-    <div className="space-y-4">
-      <p className="text-sm text-muted-foreground">
-        Connect a read-only PostgreSQL database, index schema for RAG, then ask
-        questions or fill playground params from real IDs.
-      </p>
+    <div className="space-y-6 min-w-0">
+      <div className="space-y-4">
+        <p className="text-sm text-muted-foreground">
+          Connect a read-only PostgreSQL database and index its schema for the
+          unified chat assistant and playground param filling.
+        </p>
 
-      <div className="flex flex-wrap gap-2">
-        <Button size="sm" variant="outline" onClick={() => setConnectOpen(true)}>
-          <Database className="h-4 w-4 mr-1" />
-          Connect
-        </Button>
-        {connectionId ? (
-          <>
-            <Button size="sm" variant="outline" onClick={() => void handleIndex()} disabled={indexing}>
-              {indexing ? (
-                <Loader2 className="h-4 w-4 animate-spin" />
-              ) : (
-                <RefreshCw className="h-4 w-4 mr-1" />
-              )}
-              Index schema
-            </Button>
-            <Button size="sm" variant="ghost" onClick={() => void handleDelete()}>
-              <Trash2 className="h-4 w-4" />
-            </Button>
-          </>
-        ) : null}
+        <div className="flex flex-wrap gap-2">
+          <Button size="sm" variant="outline" onClick={() => setConnectOpen(true)}>
+            <Database className="h-4 w-4 mr-1" />
+            Connect
+          </Button>
+          {activeId ? (
+            <>
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => void handleIndex()}
+                disabled={indexing}
+              >
+                {indexing ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <RefreshCw className="h-4 w-4 mr-1" />
+                )}
+                Index schema
+              </Button>
+              <Button size="sm" variant="ghost" onClick={() => void handleDelete()}>
+                <Trash2 className="h-4 w-4" />
+              </Button>
+            </>
+          ) : null}
+        </div>
+
+        {connections.length > 0 ? (
+          <Select
+            value={activeId}
+            onValueChange={(id) => {
+              setConnectionId(id);
+              onConnectionIdChange?.(id);
+            }}
+          >
+            <SelectTrigger className="h-9">
+              <SelectValue placeholder="Select connection" />
+            </SelectTrigger>
+            <SelectContent>
+              {connections.map((c) => (
+                <SelectItem key={c.id} value={c.id}>
+                  {c.label} ({c.status}) — {c.indexedChunkCount ?? 0} chunks
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        ) : (
+          <Alert>
+            <AlertTitle>No database connected</AlertTitle>
+            <AlertDescription>
+              Use Connect to add a read-only PostgreSQL source.
+            </AlertDescription>
+          </Alert>
+        )}
       </div>
 
-      {connections.length > 0 ? (
-        <Select value={connectionId} onValueChange={setConnectionId}>
-          <SelectTrigger className="h-9">
-            <SelectValue placeholder="Select connection" />
-          </SelectTrigger>
-          <SelectContent>
-            {connections.map((c) => (
-              <SelectItem key={c.id} value={c.id}>
-                {c.label} ({c.status}) — {c.indexedChunkCount ?? 0} chunks
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-      ) : (
-        <Alert>
-          <AlertTitle>No database connected</AlertTitle>
-          <AlertDescription>Use Connect to add a read-only PostgreSQL source.</AlertDescription>
-        </Alert>
-      )}
-
-      <Textarea
-        placeholder="Ask about your schema or data (e.g. Which table stores user IDs?)"
-        value={question}
-        onChange={(e) => setQuestion(e.target.value)}
-        className="min-h-20"
-      />
-      <Button onClick={() => void handleAsk()} disabled={loading || !connectionId}>
-        {loading ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
-        Ask database
-      </Button>
-      {answer ? (
-        <pre className="text-xs whitespace-pre-wrap rounded-md border p-3 bg-muted/30 max-h-64 overflow-y-auto">
-          {answer}
-        </pre>
+      {activeId ? (
+        <div className="space-y-2 min-w-0">
+          <h3 className="text-sm font-medium">Browse tables</h3>
+          <DbTableBrowser specId={specId} connectionId={activeId} />
+        </div>
       ) : null}
 
       <ConnectDbDialog

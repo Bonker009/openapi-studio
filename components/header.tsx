@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { Button } from "@/components/ui/button";
-import { ArrowLeft, Home, History, Upload, Zap } from "lucide-react";
+import { ArrowLeft, Home, History, Upload, Zap, GitBranch } from "lucide-react";
 
 type HeaderProps = {
   title: string;
@@ -94,6 +94,12 @@ export function Header({
                 <Link href={`/documentation/${specId}/playground`}>
                   <Zap className="h-4 w-4" />
                   Playground
+                </Link>
+              </Button>
+              <Button variant="outline" size="sm" className="gap-2" asChild>
+                <Link href={`/documentation/${specId}/erd`}>
+                  <GitBranch className="h-4 w-4" />
+                  ER Diagram
                 </Link>
               </Button>
               <Button variant="outline" size="sm" className="gap-2" asChild>

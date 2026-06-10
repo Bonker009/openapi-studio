@@ -10,6 +10,8 @@ const parser = new Parser();
 export type SanitizeSqlOptions = {
   maxRows?: number;
   allowedTables?: string[];
+  /** When false, do not append LIMIT if the query has none (agent chat path). */
+  injectLimit?: boolean;
 };
 
 export function sanitizeReadOnlySql(
@@ -65,7 +67,8 @@ export function sanitizeReadOnlySql(
     }
   }
 
-  if (!HAS_LIMIT_TAIL_RE.test(query)) {
+  const injectLimit = options.injectLimit !== false;
+  if (injectLimit && !HAS_LIMIT_TAIL_RE.test(query)) {
     query += ` LIMIT ${maxRows}`;
   }
 

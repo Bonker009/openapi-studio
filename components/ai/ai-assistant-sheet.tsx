@@ -31,7 +31,7 @@ export function AiAssistantSheet({
       <SheetContent
         side="right"
         forceMount
-        className="flex h-full w-full flex-col gap-0 p-0 sm:max-w-xl md:max-w-2xl data-[state=closed]:pointer-events-none"
+        className="flex h-full w-full flex-col gap-0 p-0 sm:max-w-2xl md:max-w-3xl lg:max-w-4xl xl:max-w-[min(56rem,92vw)] data-[state=closed]:pointer-events-none"
       >
         <SheetHeader className="shrink-0 border-b px-6 py-4 text-left">
           <SheetTitle className="flex items-center gap-2">
@@ -39,8 +39,8 @@ export function AiAssistantSheet({
             AI Assistant
           </SheetTitle>
           <SheetDescription>
-            Index OpenAPI, generate flows, or ask documentation questions with
-            streaming answers.
+            Chat about your API and database, generate flows, or index specs for
+            grounded answers.
           </SheetDescription>
         </SheetHeader>
         <div className="flex flex-1 min-h-0 flex-col overflow-hidden px-6 py-4">
