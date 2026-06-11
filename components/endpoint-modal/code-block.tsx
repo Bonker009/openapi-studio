@@ -3,9 +3,9 @@
 import { Copy, Check } from "lucide-react";
 import { useState } from "react";
 import { Prism as SyntaxHighlighter } from "react-syntax-highlighter";
-import { vscDarkPlus } from "react-syntax-highlighter/dist/esm/styles/prism";
 
 import { Button } from "@/components/ui/button";
+import { useSyntaxHighlightStyle } from "@/hooks/use-syntax-highlight-style";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 
@@ -24,6 +24,7 @@ export function CodeBlock({
 }: CodeBlockProps) {
   const constrainHeight = maxHeight !== "max-h-none";
   const [copied, setCopied] = useState(false);
+  const highlightStyle = useSyntaxHighlightStyle();
 
   const handleCopy = async () => {
     try {
@@ -60,7 +61,7 @@ export function CodeBlock({
       >
         <SyntaxHighlighter
           language={language}
-          style={vscDarkPlus}
+          style={highlightStyle}
           customStyle={{
             margin: 0,
             borderRadius: 0,

@@ -1,6 +1,10 @@
 "use client";
 
 import { lazy, Suspense } from "react";
+import {
+  editorSurfaceClassName,
+  editorTextareaClassName,
+} from "@/lib/playground/codemirror-theme";
 import { cn } from "@/lib/utils";
 
 type JsonBodyEditorProps = {
@@ -19,18 +23,17 @@ function JsonBodyEditorFallback({
   "aria-labelledby": ariaLabelledBy,
 }: JsonBodyEditorProps) {
   return (
-    <textarea
-      value={value}
-      onChange={(e) => onChange(e.target.value)}
-      className={cn(
-        "w-full rounded-md border border-input bg-card p-3 font-mono text-xs text-foreground shadow-xs outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50",
-        className
-      )}
-      style={{ minHeight }}
-      spellCheck={false}
-      aria-label={ariaLabelledBy ? undefined : "Request body (JSON)"}
-      aria-labelledby={ariaLabelledBy}
-    />
+    <div className={cn(editorSurfaceClassName, "json-body-editor", className)}>
+      <textarea
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        className={cn(editorTextareaClassName, "min-h-0 border-0 shadow-none")}
+        style={{ minHeight }}
+        spellCheck={false}
+        aria-label={ariaLabelledBy ? undefined : "Request body (JSON)"}
+        aria-labelledby={ariaLabelledBy}
+      />
+    </div>
   );
 }
 

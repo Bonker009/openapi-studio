@@ -3,8 +3,8 @@
 import { useCallback, useEffect, useState } from "react";
 import { KeyRound, Plus, Trash2, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { CredentialAddForm } from "@/components/playground/credential-add-form";
 import { Badge } from "@/components/ui/badge";
 import {
   Popover,
@@ -20,12 +20,9 @@ import {
 } from "@/components/ui/select";
 import {
   type Credential,
-  type CredentialType,
   credentialRequiresAuth,
-  getActiveCredential,
   getActiveCredentialId,
   getCredentials,
-  newCredentialId,
   setActiveCredentialId,
   setCredentials,
 } from "@/lib/playground/credentials";
@@ -40,6 +37,8 @@ import {
   TOKEN_REFRESH_LEAD_SECONDS,
 } from "@/lib/playground/token-lifecycle";
 import { useTokenExpiry } from "@/lib/playground/use-token-expiry";
+import { useAutoRemoveExpiredCredentials } from "@/lib/playground/use-auto-remove-expired-credentials";
+import { getCredentialExpirySubject } from "@/lib/playground/credential-expiry";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 
@@ -50,24 +49,9 @@ type TokenPanelProps = {
   variant?: "sidebar" | "navbar";
 };
 
-const CREDENTIAL_TYPES: { value: CredentialType; label: string }[] = [
-  { value: "bearer", label: "Bearer" },
-  { value: "basic", label: "Basic auth" },
-  { value: "apiKey", label: "API key" },
-  { value: "oauth2cc", label: "OAuth2 (client credentials)" },
-  { value: "oauth2rt", label: "OAuth2 (refresh token)" },
-];
-
 function expirySource(credential: Credential | null): string | number | null {
   if (!credential) return null;
-  if (
-    (credential.type === "oauth2cc" || credential.type === "oauth2rt") &&
-    credential.expiresAt
-  ) {
-    return credential.expiresAt;
-  }
-  if (credential.type === "bearer") return credential.token;
-  return null;
+  return getCredentialExpirySubject(credential);
 }
 
 export function TokenPanel({
@@ -79,22 +63,8 @@ export function TokenPanel({
   const isNavbar = variant === "navbar";
   const [credentials, setCredsState] = useState<Credential[]>([]);
   const [showAdd, setShowAdd] = useState(false);
-  const [addType, setAddType] = useState<CredentialType>("bearer");
-  const [newName, setNewName] = useState("");
   const [fetchingToken, setFetchingToken] = useState(false);
   const [expiryLabel, setExpiryLabel] = useState<string | null>(null);
-
-  const [bearerToken, setBearerToken] = useState("");
-  const [basicUser, setBasicUser] = useState("");
-  const [basicPass, setBasicPass] = useState("");
-  const [apiKeyIn, setApiKeyIn] = useState<"header" | "query">("header");
-  const [apiKeyName, setApiKeyName] = useState("X-API-Key");
-  const [apiKeyValue, setApiKeyValue] = useState("");
-  const [oauthUrl, setOauthUrl] = useState("");
-  const [oauthClientId, setOauthClientId] = useState("");
-  const [oauthSecret, setOauthSecret] = useState("");
-  const [oauthScope, setOauthScope] = useState("");
-  const [oauthRefreshToken, setOauthRefreshToken] = useState("");
 
   const expirySubject = expirySource(activeCredential);
   useTokenExpiry({
@@ -128,12 +98,27 @@ export function TokenPanel({
     onActiveChange(null);
   }, [specId, onActiveChange]);
 
+  const syncCredentials = useCallback((remaining: Credential[]) => {
+    setCredsState(remaining);
+  }, []);
+
+  useAutoRemoveExpiredCredentials(specId, {
+    onCredentialsChange: syncCredentials,
+    onActiveChange,
+  });
+
   useEffect(() => {
-    const saved = getCredentials(specId);
-    setCredsState(saved);
-    const active = getActiveCredential(specId);
-    if (active) onActiveChange(active);
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- hydrate once per spec
+    const onCredentialsUpdated = (event: Event) => {
+      const detail = (event as CustomEvent<{ specId?: string }>).detail;
+      if (detail?.specId !== specId) return;
+      setCredsState(getCredentials(specId));
+    };
+    window.addEventListener("playground-credentials-updated", onCredentialsUpdated);
+    return () =>
+      window.removeEventListener(
+        "playground-credentials-updated",
+        onCredentialsUpdated
+      );
   }, [specId]);
 
   useEffect(() => {
@@ -182,95 +167,10 @@ export function TokenPanel({
     };
   }, [activeCredential, credentials, persist, specId, onActiveChange]);
 
-  const resetAddForm = () => {
-    setNewName("");
-    setBearerToken("");
-    setBasicUser("");
-    setBasicPass("");
-    setApiKeyValue("");
-    setOauthUrl("");
-    setOauthClientId("");
-    setOauthSecret("");
-    setOauthScope("");
-    setOauthRefreshToken("");
-  };
-
-  const buildNewCredential = (): Credential | null => {
-    const name = newName.trim();
-    if (!name) return null;
-    const id = newCredentialId();
-
-    if (addType === "bearer") {
-      if (!bearerToken.trim()) return null;
-      return { id, name, type: "bearer", token: bearerToken.trim() };
-    }
-    if (addType === "basic") {
-      return {
-        id,
-        name,
-        type: "basic",
-        username: basicUser,
-        password: basicPass,
-      };
-    }
-    if (addType === "apiKey") {
-      if (!apiKeyValue.trim() || !apiKeyName.trim()) return null;
-      return {
-        id,
-        name,
-        type: "apiKey",
-        in: apiKeyIn,
-        paramName: apiKeyName.trim(),
-        value: apiKeyValue.trim(),
-      };
-    }
-    if (addType === "oauth2cc") {
-      if (!oauthUrl.trim() || !oauthClientId.trim() || !oauthSecret.trim()) {
-        return null;
-      }
-      return {
-        id,
-        name,
-        type: "oauth2cc",
-        tokenUrl: oauthUrl.trim(),
-        clientId: oauthClientId.trim(),
-        clientSecret: oauthSecret.trim(),
-        scope: oauthScope.trim() || undefined,
-      };
-    }
-    if (addType === "oauth2rt") {
-      if (
-        !oauthUrl.trim() ||
-        !oauthClientId.trim() ||
-        !oauthSecret.trim() ||
-        !oauthRefreshToken.trim()
-      ) {
-        return null;
-      }
-      return {
-        id,
-        name,
-        type: "oauth2rt",
-        tokenUrl: oauthUrl.trim(),
-        clientId: oauthClientId.trim(),
-        clientSecret: oauthSecret.trim(),
-        scope: oauthScope.trim() || undefined,
-        refreshToken: oauthRefreshToken.trim(),
-      };
-    }
-    return null;
-  };
-
-  const addCredential = () => {
-    const cred = buildNewCredential();
-    if (!cred) {
-      toast.error("Fill in all required fields");
-      return;
-    }
+  const addCredential = (cred: Credential) => {
     const next = [...credentials, cred];
     persist(next);
     selectCredential(cred.id);
-    resetAddForm();
     setShowAdd(false);
   };
 
@@ -320,181 +220,7 @@ export function TokenPanel({
     </Badge>
   );
 
-  const addForm = (
-    <div className="space-y-2">
-      <Label htmlFor="cred-add-type" className="text-xs">
-        Credential type
-      </Label>
-      <Select
-        value={addType}
-        onValueChange={(v) => setAddType(v as CredentialType)}
-      >
-        <SelectTrigger id="cred-add-type" className="h-8 text-xs">
-          <SelectValue />
-        </SelectTrigger>
-        <SelectContent>
-          {CREDENTIAL_TYPES.map((t) => (
-            <SelectItem key={t.value} value={t.value}>
-              {t.label}
-            </SelectItem>
-          ))}
-        </SelectContent>
-      </Select>
-      <Label htmlFor="cred-add-name" className="text-xs">
-        Name
-      </Label>
-      <Input
-        id="cred-add-name"
-        placeholder="e.g. Admin"
-        value={newName}
-        onChange={(e) => setNewName(e.target.value)}
-        className="h-8 text-sm"
-      />
-      {addType === "bearer" && (
-        <>
-          <Label htmlFor="cred-add-bearer" className="text-xs">
-            Bearer token
-          </Label>
-          <Input
-            id="cred-add-bearer"
-            type="password"
-            placeholder="Bearer token"
-            value={bearerToken}
-            onChange={(e) => setBearerToken(e.target.value)}
-            className="h-8 text-sm font-mono"
-          />
-        </>
-      )}
-      {addType === "basic" && (
-        <>
-          <Label htmlFor="cred-add-basic-user" className="text-xs">
-            Username
-          </Label>
-          <Input
-            id="cred-add-basic-user"
-            placeholder="Username"
-            value={basicUser}
-            onChange={(e) => setBasicUser(e.target.value)}
-            className="h-8 text-sm"
-          />
-          <Label htmlFor="cred-add-basic-pass" className="text-xs">
-            Password
-          </Label>
-          <Input
-            id="cred-add-basic-pass"
-            type="password"
-            placeholder="Password"
-            value={basicPass}
-            onChange={(e) => setBasicPass(e.target.value)}
-            className="h-8 text-sm"
-          />
-        </>
-      )}
-      {addType === "apiKey" && (
-        <>
-          <Label htmlFor="cred-add-apikey-in" className="text-xs">
-            Send API key in
-          </Label>
-          <Select
-            value={apiKeyIn}
-            onValueChange={(v) => setApiKeyIn(v as "header" | "query")}
-          >
-            <SelectTrigger id="cred-add-apikey-in" className="h-8 text-xs">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="header">Header</SelectItem>
-              <SelectItem value="query">Query</SelectItem>
-            </SelectContent>
-          </Select>
-          <Label htmlFor="cred-add-apikey-name" className="text-xs">
-            Parameter name
-          </Label>
-          <Input
-            id="cred-add-apikey-name"
-            placeholder="X-API-Key"
-            value={apiKeyName}
-            onChange={(e) => setApiKeyName(e.target.value)}
-            className="h-8 text-sm font-mono"
-          />
-          <Label htmlFor="cred-add-apikey-value" className="text-xs">
-            API key value
-          </Label>
-          <Input
-            id="cred-add-apikey-value"
-            type="password"
-            placeholder="API key value"
-            value={apiKeyValue}
-            onChange={(e) => setApiKeyValue(e.target.value)}
-            className="h-8 text-sm font-mono"
-          />
-        </>
-      )}
-      {(addType === "oauth2cc" || addType === "oauth2rt") && (
-        <>
-          <Label htmlFor="cred-add-oauth-url" className="text-xs">
-            Token URL
-          </Label>
-          <Input
-            id="cred-add-oauth-url"
-            placeholder="https://auth.example.com/oauth/token"
-            value={oauthUrl}
-            onChange={(e) => setOauthUrl(e.target.value)}
-            className="h-8 text-sm font-mono"
-          />
-          <Label htmlFor="cred-add-oauth-client-id" className="text-xs">
-            Client ID
-          </Label>
-          <Input
-            id="cred-add-oauth-client-id"
-            placeholder="Client ID"
-            value={oauthClientId}
-            onChange={(e) => setOauthClientId(e.target.value)}
-            className="h-8 text-sm"
-          />
-          <Label htmlFor="cred-add-oauth-secret" className="text-xs">
-            Client secret
-          </Label>
-          <Input
-            id="cred-add-oauth-secret"
-            type="password"
-            placeholder="Client secret"
-            value={oauthSecret}
-            onChange={(e) => setOauthSecret(e.target.value)}
-            className="h-8 text-sm"
-          />
-          <Label htmlFor="cred-add-oauth-scope" className="text-xs">
-            Scope (optional)
-          </Label>
-          <Input
-            id="cred-add-oauth-scope"
-            placeholder="read write"
-            value={oauthScope}
-            onChange={(e) => setOauthScope(e.target.value)}
-            className="h-8 text-sm"
-          />
-          {addType === "oauth2rt" && (
-            <>
-              <Label htmlFor="cred-add-oauth-refresh" className="text-xs">
-                Refresh token
-              </Label>
-              <Input
-                id="cred-add-oauth-refresh"
-                type="password"
-                placeholder="Refresh token"
-                value={oauthRefreshToken}
-                onChange={(e) => setOauthRefreshToken(e.target.value)}
-                className="h-8 text-sm font-mono"
-              />
-            </>
-          )}
-        </>
-      )}
-      <Button size="sm" className="w-full h-8" onClick={addCredential}>
-        Save credential
-      </Button>
-    </div>
-  );
+  const addForm = <CredentialAddForm onSubmit={addCredential} />;
 
   const credManageList = credentials.length > 0 && (
     <ul className="space-y-1 border-t pt-2 mt-2 max-h-40 overflow-y-auto">
@@ -592,7 +318,7 @@ export function TokenPanel({
               <span className="sr-only sm:not-sr-only sm:ml-1 text-xs">Auth</span>
             </Button>
           </PopoverTrigger>
-          <PopoverContent className="w-80" align="end">
+          <PopoverContent className="w-80" align="end" data-no-credential-save>
             <p className="text-xs font-medium mb-2">Credentials</p>
             {addForm}
             {credManageList}

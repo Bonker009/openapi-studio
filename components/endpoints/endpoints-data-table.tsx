@@ -48,7 +48,7 @@ import {
   type EndpointRow,
   type EndpointColumnOptions,
 } from "@/components/endpoints/columns";
-import { getControllerRowStyle } from "@/lib/controller-colors";
+import { useControllerColors } from "@/hooks/use-controller-colors";
 
 const METHOD_OPTIONS = ["GET", "POST", "PUT", "PATCH", "DELETE"].map((m) => ({
   label: m,
@@ -78,6 +78,7 @@ export function EndpointsDataTable({
   const [columnVisibility, setColumnVisibility] =
     React.useState<VisibilityState>({});
   const [globalFilter, setGlobalFilter] = React.useState("");
+  const { getControllerRowStyle } = useControllerColors();
 
   const columns = React.useMemo(
     () =>

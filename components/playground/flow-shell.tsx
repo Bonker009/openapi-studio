@@ -20,6 +20,7 @@ import {
   X,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { HeaderActions } from "@/components/header-actions";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -52,16 +53,10 @@ import {
   hasSeenFlowTutorial,
   markFlowTutorialSeen,
 } from "@/components/playground/flow-tutorial-dialog";
-import {
-  buildSampleFlow,
-  canBuildSampleFlow,
-} from "@/lib/flows/sample-flow";
+import { buildSampleFlow, canBuildSampleFlow } from "@/lib/flows/sample-flow";
 import { PayloadTreeView } from "@/components/playground/payload-picker";
 import { extractPlaygroundEndpoints } from "@/lib/playground/endpoints";
-import {
-  getCredentials,
-  type Credential,
-} from "@/lib/playground/credentials";
+import { getCredentials, type Credential } from "@/lib/playground/credentials";
 import { executePlaygroundRequest } from "@/lib/playground/execute-request";
 import { runFlow, type PauseDecision } from "@/lib/flows/run-flow";
 import { orderSteps } from "@/lib/flows/order";
@@ -84,6 +79,7 @@ import {
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { AiFloatingButton } from "@/components/ai/ai-floating-button";
+import { SaveCredentialOnSelection } from "@/components/playground/save-credential-on-selection";
 
 type PauseState = {
   stepId: string;
@@ -120,10 +116,10 @@ export function FlowShell({
   apiData,
 }: FlowShellProps) {
   const [baseUrl, setBaseUrl] = useState(
-    apiData.servers?.[0]?.url?.replace(/\/$/, "") ?? "http://localhost:8080"
+    apiData.servers?.[0]?.url?.replace(/\/$/, "") ?? "http://localhost:8080",
   );
   const [activeCredential, setActiveCredential] = useState<Credential | null>(
-    null
+    null,
   );
   const [credentials, setCredentials] = useState<Credential[]>([]);
   const [savedFlows, setSavedFlows] = useState<Flow[]>([]);
@@ -133,7 +129,7 @@ export function FlowShell({
   const [running, setRunning] = useState(false);
   const [runResults, setRunResults] = useState<StepRunResult[]>([]);
   const [runOutcome, setRunOutcome] = useState<FlowRunResult["outcome"] | null>(
-    null
+    null,
   );
   const [runningIndex, setRunningIndex] = useState<number | null>(null);
   const [runStartedAt, setRunStartedAt] = useState<number | undefined>();
@@ -159,20 +155,22 @@ export function FlowShell({
   const endpoints = useMemo(
     () =>
       extractPlaygroundEndpoints({
-        paths: apiData.paths as Record<string, Record<string, unknown>> | undefined,
+        paths: apiData.paths as
+          | Record<string, Record<string, unknown>>
+          | undefined,
         security: apiData.security,
       }),
-    [apiData.paths, apiData.security]
+    [apiData.paths, apiData.security],
   );
 
   const dirty = useMemo(
     () => JSON.stringify(draft) !== savedSnapshot,
-    [draft, savedSnapshot]
+    [draft, savedSnapshot],
   );
 
   const stepsById = useMemo(
     () => new Map(draft.steps.map((s) => [s.id, s] as const)),
-    [draft.steps]
+    [draft.steps],
   );
 
   const refreshCredentials = useCallback(() => {
@@ -198,7 +196,7 @@ export function FlowShell({
 
   const sampleFlowAvailable = useMemo(
     () => canBuildSampleFlow(endpoints),
-    [endpoints]
+    [endpoints],
   );
 
   const executionMode = draft.executionMode ?? "sequential";
@@ -254,7 +252,10 @@ export function FlowShell({
 
   const applyGeneratedFlow = useCallback(
     (flow: Flow) => {
-      if (dirty && !confirm("Replace the current draft with the AI-generated flow?")) {
+      if (
+        dirty &&
+        !confirm("Replace the current draft with the AI-generated flow?")
+      ) {
         return;
       }
       setDraft(flow);
@@ -265,7 +266,7 @@ export function FlowShell({
       setActiveTab("builder");
       toast.success("AI flow applied to draft");
     },
-    [dirty]
+    [dirty],
   );
 
   const duplicateFlow = () => {
@@ -312,168 +313,171 @@ export function FlowShell({
     }
   };
 
-  const handleRun = useCallback(async (options?: {
-    stepThrough?: boolean;
-    startStepId?: string;
-  }) => {
-    const { stepThrough = false, startStepId } = options ?? {};
-    const executionMode = draft.executionMode ?? "sequential";
-    if (stepThrough && executionMode === "parallel") {
-      toast.error("Step through is not available in parallel mode");
-      return;
-    }
-    if (draft.steps.length === 0) {
-      toast.error("Add at least one step to run");
-      return;
-    }
-    if (runningRef.current) return;
-
-    const ordered = orderSteps(draft);
-    const orderedIds = ordered.map((s) => s.id);
-
-    // Resolve a resume start index (reusing prior results/context), else full run.
-    let startIndex = 0;
-    if (startStepId) {
-      const idx = ordered.findIndex((s) => s.id === startStepId);
-      const prefixOk =
-        idx > 0 &&
-        lastContextRef.current != null &&
-        runOrderIdsRef.current.length >= idx &&
-        runResultsRef.current.length >= idx &&
-        orderedIds
-          .slice(0, idx)
-          .every((id, i) => runOrderIdsRef.current[i] === id);
-      if (idx <= 0) {
-        startIndex = 0;
-      } else if (prefixOk) {
-        startIndex = idx;
-      } else {
-        toast.info("Flow changed since the last run; running from the start.");
-        startIndex = 0;
+  const handleRun = useCallback(
+    async (options?: { stepThrough?: boolean; startStepId?: string }) => {
+      const { stepThrough = false, startStepId } = options ?? {};
+      const executionMode = draft.executionMode ?? "sequential";
+      if (stepThrough && executionMode === "parallel") {
+        toast.error("Step through is not available in parallel mode");
+        return;
       }
-    }
+      if (draft.steps.length === 0) {
+        toast.error("Add at least one step to run");
+        return;
+      }
+      if (runningRef.current) return;
 
-    const isResume = startIndex > 0;
-    abortRef.current?.abort();
-    const ac = new AbortController();
-    abortRef.current = ac;
-    runningRef.current = true;
-    setRunning(true);
-    if (!isResume) setRunResults([]);
-    setRunOutcome(null);
-    setRunningIndex(startIndex);
-    const started = Date.now();
-    setRunStartedAt(started);
-    setRunFinishedAt(undefined);
+      const ordered = orderSteps(draft);
+      const orderedIds = ordered.map((s) => s.id);
 
-    try {
-      const result = await runFlow({
-        flow: { ...draft, steps: ordered },
-        endpoints,
-        baseUrl,
-        credentials,
-        defaultCredential: activeCredential,
-        specId,
-        onCredentialRefresh: setActiveCredential,
-        execute: executePlaygroundRequest,
-        signal: ac.signal,
-        stepThrough,
-        startIndex,
-        seedContext: isResume ? lastContextRef.current ?? undefined : undefined,
-        priorResults: isResume
-          ? runResultsRef.current.slice(0, startIndex)
-          : undefined,
-        onProgress: (stepResult, index) => {
-          setRunResults((prev) => {
-            const next = [...prev];
-            next[index] = stepResult;
-            return next;
-          });
-          setRunningIndex(index + 1 < draft.steps.length ? index + 1 : null);
-        },
-        onPause: (info) =>
-          new Promise<PauseDecision>((resolve) => {
-            const endpoint = endpoints.find(
-              (e) => flowEndpointKey(e) === info.step.endpointKey
-            );
-            const payload = getStepPayload(
-              endpoint,
-              apiData,
-              baseUrl,
-              info.result
-            );
-            setPauseCaptures([]);
-            setPauseState({
-              stepId: info.step.id,
-              index: info.index,
-              total: info.total,
-              method: info.result.method,
-              path: info.result.path,
-              payload,
+      // Resolve a resume start index (reusing prior results/context), else full run.
+      let startIndex = 0;
+      if (startStepId) {
+        const idx = ordered.findIndex((s) => s.id === startStepId);
+        const prefixOk =
+          idx > 0 &&
+          lastContextRef.current != null &&
+          runOrderIdsRef.current.length >= idx &&
+          runResultsRef.current.length >= idx &&
+          orderedIds
+            .slice(0, idx)
+            .every((id, i) => runOrderIdsRef.current[i] === id);
+        if (idx <= 0) {
+          startIndex = 0;
+        } else if (prefixOk) {
+          startIndex = idx;
+        } else {
+          toast.info(
+            "Flow changed since the last run; running from the start.",
+          );
+          startIndex = 0;
+        }
+      }
+
+      const isResume = startIndex > 0;
+      abortRef.current?.abort();
+      const ac = new AbortController();
+      abortRef.current = ac;
+      runningRef.current = true;
+      setRunning(true);
+      if (!isResume) setRunResults([]);
+      setRunOutcome(null);
+      setRunningIndex(startIndex);
+      const started = Date.now();
+      setRunStartedAt(started);
+      setRunFinishedAt(undefined);
+
+      try {
+        const result = await runFlow({
+          flow: { ...draft, steps: ordered },
+          endpoints,
+          baseUrl,
+          credentials,
+          defaultCredential: activeCredential,
+          specId,
+          onCredentialRefresh: setActiveCredential,
+          execute: executePlaygroundRequest,
+          signal: ac.signal,
+          stepThrough,
+          startIndex,
+          seedContext: isResume
+            ? (lastContextRef.current ?? undefined)
+            : undefined,
+          priorResults: isResume
+            ? runResultsRef.current.slice(0, startIndex)
+            : undefined,
+          onProgress: (stepResult, index) => {
+            setRunResults((prev) => {
+              const next = [...prev];
+              next[index] = stepResult;
+              return next;
             });
-            pauseResolverRef.current = resolve;
-          }),
-      });
-      setRunResults(result.steps);
-      setRunOutcome(result.outcome);
-      setRunFinishedAt(Date.now());
-      lastContextRef.current = result.context ?? null;
-      runOrderIdsRef.current = orderedIds;
-      void persistFlowRun({ ...draft, steps: ordered }, result).catch((error) => {
-        console.warn("Failed to persist flow run metadata:", error);
-      });
-
-      if (result.outcome === "pass") {
-        toast.success("Flow completed successfully");
-        setActiveTab("results");
-      } else if (result.outcome === "fail") {
-        toast.warning("Flow finished with failures");
-        const bad = result.steps.find(
-          (s) => s.outcome === "fail" || s.outcome === "error"
+            setRunningIndex(index + 1 < draft.steps.length ? index + 1 : null);
+          },
+          onPause: (info) =>
+            new Promise<PauseDecision>((resolve) => {
+              const endpoint = endpoints.find(
+                (e) => flowEndpointKey(e) === info.step.endpointKey,
+              );
+              const payload = getStepPayload(
+                endpoint,
+                apiData,
+                baseUrl,
+                info.result,
+              );
+              setPauseCaptures([]);
+              setPauseState({
+                stepId: info.step.id,
+                index: info.index,
+                total: info.total,
+                method: info.result.method,
+                path: info.result.path,
+                payload,
+              });
+              pauseResolverRef.current = resolve;
+            }),
+        });
+        setRunResults(result.steps);
+        setRunOutcome(result.outcome);
+        setRunFinishedAt(Date.now());
+        lastContextRef.current = result.context ?? null;
+        runOrderIdsRef.current = orderedIds;
+        void persistFlowRun({ ...draft, steps: ordered }, result).catch(
+          (error) => {
+            console.warn("Failed to persist flow run metadata:", error);
+          },
         );
-        if (bad) {
-          setActiveTab("builder");
-          setFocusStepId(bad.stepId);
-          requestAnimationFrame(() => {
-            document.getElementById(`flow-step-${bad.stepId}`)?.scrollIntoView({
-              behavior: "smooth",
-              block: "center",
+
+        if (result.outcome === "pass") {
+          toast.success("Flow completed successfully");
+          setActiveTab("results");
+        } else if (result.outcome === "fail") {
+          toast.warning("Flow finished with failures");
+          const bad = result.steps.find(
+            (s) => s.outcome === "fail" || s.outcome === "error",
+          );
+          if (bad) {
+            setActiveTab("builder");
+            setFocusStepId(bad.stepId);
+            requestAnimationFrame(() => {
+              document
+                .getElementById(`flow-step-${bad.stepId}`)
+                ?.scrollIntoView({
+                  behavior: "smooth",
+                  block: "center",
+                });
             });
-          });
-        }
-      } else {
-        toast.error("Flow finished with errors");
-        const bad = result.steps.find((s) => s.outcome === "error");
-        if (bad) {
-          setActiveTab("builder");
-          setFocusStepId(bad.stepId);
-          requestAnimationFrame(() => {
-            document.getElementById(`flow-step-${bad.stepId}`)?.scrollIntoView({
-              behavior: "smooth",
-              block: "center",
+          }
+        } else {
+          toast.error("Flow finished with errors");
+          const bad = result.steps.find((s) => s.outcome === "error");
+          if (bad) {
+            setActiveTab("builder");
+            setFocusStepId(bad.stepId);
+            requestAnimationFrame(() => {
+              document
+                .getElementById(`flow-step-${bad.stepId}`)
+                ?.scrollIntoView({
+                  behavior: "smooth",
+                  block: "center",
+                });
             });
-          });
+          }
         }
+      } catch (err) {
+        if (!(err instanceof Error && err.name === "AbortError")) {
+          toast.error("Flow run failed");
+        }
+        setRunFinishedAt(Date.now());
+      } finally {
+        setRunning(false);
+        setRunningIndex(null);
+        runningRef.current = false;
+        abortRef.current = null;
       }
-    } catch (err) {
-      if (!(err instanceof Error && err.name === "AbortError")) {
-        toast.error("Flow run failed");
-      }
-      setRunFinishedAt(Date.now());
-    } finally {
-      setRunning(false);
-      setRunningIndex(null);
-      runningRef.current = false;
-      abortRef.current = null;
-    }
-  }, [
-    draft,
-    endpoints,
-    baseUrl,
-    credentials,
-    activeCredential,
-    apiData,
-  ]);
+    },
+    [draft, endpoints, baseUrl, credentials, activeCredential, apiData],
+  );
 
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
@@ -504,7 +508,7 @@ export function FlowShell({
       setPauseCaptures([]);
       resolver?.({ action, extraCaptures });
     },
-    [pauseCaptures]
+    [pauseCaptures],
   );
 
   const handleCancel = () => {
@@ -523,14 +527,12 @@ export function FlowShell({
     (stepId: string) => {
       void handleRun({ startStepId: stepId });
     },
-    [handleRun]
+    [handleRun],
   );
 
   const firstFailedStepId = useMemo(() => {
     const failed = runResults.find(
-      (r) =>
-        r != null &&
-        (r.outcome === "fail" || r.outcome === "error")
+      (r) => r != null && (r.outcome === "fail" || r.outcome === "error"),
     );
     return failed?.stepId ?? null;
   }, [runResults]);
@@ -550,9 +552,14 @@ export function FlowShell({
   return (
     <div className="flex flex-col flex-1 min-h-0">
       <header className="shrink-0 z-20 bg-card border-b border-border">
-        <div className="h-1 bg-primary w-full" />
+        <div className="h-1 bg-background w-full" />
         <div className="flex flex-wrap items-center gap-x-3 gap-y-2 px-4 py-3">
-          <Button variant="ghost" size="icon" className="shrink-0 h-9 w-9" asChild>
+          <Button
+            variant="ghost"
+            size="icon"
+            className="shrink-0 h-9 w-9"
+            asChild
+          >
             <Link href={`/documentation/${specId}/playground`}>
               <ArrowLeft className="h-5 w-5" />
               <span className="sr-only">Back to playground</span>
@@ -575,7 +582,10 @@ export function FlowShell({
               onActiveUrlChange={setBaseUrl}
               variant="navbar"
             />
-            <div className="hidden sm:block h-6 w-px bg-border shrink-0" aria-hidden />
+            <div
+              className="hidden sm:block h-6 w-px bg-border shrink-0"
+              aria-hidden
+            />
             <Button
               variant="outline"
               size="sm"
@@ -593,7 +603,9 @@ export function FlowShell({
             >
               <FolderOpen className="h-3.5 w-3.5" />
               Saved flows
-              <span className="text-muted-foreground">({savedFlows.length})</span>
+              <span className="text-muted-foreground">
+                ({savedFlows.length})
+              </span>
             </Button>
             <TokenPanel
               specId={specId}
@@ -700,11 +712,12 @@ export function FlowShell({
                 </Button>
               </>
             )}
+            <HeaderActions />
           </div>
         </div>
       </header>
 
-      <main className="flex flex-1 min-h-0 overflow-hidden">
+      <main id="main-content" className="flex flex-1 min-h-0 overflow-hidden">
         <div className="flex-1 min-w-0 flex flex-col min-h-0">
           <Tabs
             value={activeTab}
@@ -727,7 +740,9 @@ export function FlowShell({
                     <span
                       className={cn(
                         "ml-1 text-[10px]",
-                        runOutcome === "pass" ? "text-success" : "text-destructive"
+                        runOutcome === "pass"
+                          ? "text-success"
+                          : "text-destructive",
                       )}
                     >
                       ({runOutcome})
@@ -736,7 +751,10 @@ export function FlowShell({
                 </TabsTrigger>
               </TabsList>
             </div>
-            <TabsContent value="builder" className="flex-1 min-h-0 overflow-hidden m-0">
+            <TabsContent
+              value="builder"
+              className="flex-1 min-h-0 overflow-hidden m-0"
+            >
               <FlowBuilder
                 flow={draft}
                 endpoints={endpoints}
@@ -827,7 +845,9 @@ export function FlowShell({
           </div>
           <div className="max-h-[50vh] space-y-1 overflow-y-auto">
             {loadingFlows && (
-              <p className="px-1 py-4 text-xs text-muted-foreground">Loading…</p>
+              <p className="px-1 py-4 text-xs text-muted-foreground">
+                Loading…
+              </p>
             )}
             {!loadingFlows && savedFlows.length === 0 && (
               <p className="px-1 py-4 text-xs text-muted-foreground">
@@ -839,7 +859,7 @@ export function FlowShell({
                 key={f.id}
                 className={cn(
                   "group flex items-start justify-between gap-1 rounded-md border px-2 py-2 cursor-pointer hover:bg-muted/50",
-                  draft.id === f.id && "border-primary bg-primary/5"
+                  draft.id === f.id && "border-primary bg-primary/5",
                 )}
                 onClick={() => selectFlow(f)}
               >
@@ -899,14 +919,14 @@ export function FlowShell({
                 title="Live response"
                 variant="panel"
                 onPick={(path, preview) =>
-                    setPauseCaptures((prev) =>
-                      prev.some((c) => c.path === path)
-                        ? prev
-                        : [
-                            ...prev,
-                            { name: suggestVarName(path), path, preview },
-                          ]
-                    )
+                  setPauseCaptures((prev) =>
+                    prev.some((c) => c.path === path)
+                      ? prev
+                      : [
+                          ...prev,
+                          { name: suggestVarName(path), path, preview },
+                        ],
+                  )
                 }
               />
 
@@ -924,8 +944,8 @@ export function FlowShell({
                         onChange={(e) =>
                           setPauseCaptures((prev) =>
                             prev.map((p, j) =>
-                              j === i ? { ...p, name: e.target.value } : p
-                            )
+                              j === i ? { ...p, name: e.target.value } : p,
+                            ),
                           )
                         }
                       />
@@ -940,7 +960,7 @@ export function FlowShell({
                         aria-label="Remove capture"
                         onClick={() =>
                           setPauseCaptures((prev) =>
-                            prev.filter((_, j) => j !== i)
+                            prev.filter((_, j) => j !== i),
                           )
                         }
                       >
@@ -976,6 +996,14 @@ export function FlowShell({
           )}
         </DialogContent>
       </Dialog>
+
+      <SaveCredentialOnSelection
+        specId={specId}
+        onActiveChange={(c) => {
+          setActiveCredential(c);
+          refreshCredentials();
+        }}
+      />
 
       <AiFloatingButton
         specId={specId}

@@ -34,7 +34,7 @@ import {
 } from "lucide-react";
 import { TestCaseGenerator } from "@/lib/test-case-generator";
 import { Prism as SyntaxHighlighter } from "react-syntax-highlighter";
-import { vscDarkPlus } from "react-syntax-highlighter/dist/esm/styles/prism";
+import { useSyntaxHighlightStyle } from "@/hooks/use-syntax-highlight-style";
 import { runTestCase as serverRunTestCase } from "@/components/runTestCase";
 
 export default function TestCaseGeneratorPanel({
@@ -66,6 +66,7 @@ export default function TestCaseGeneratorPanel({
   const [activeTab, setActiveTab] = useState<"generate" | "run">("generate");
   const [results, setResults] = useState<Record<number, any>>({});
   const [runningIndex, setRunningIndex] = useState<number | null>(null);
+  const highlightStyle = useSyntaxHighlightStyle();
 
   // Load tokens from localStorage on mount
   useEffect(() => {
@@ -233,7 +234,7 @@ export default function TestCaseGeneratorPanel({
                   <div className="p-4">
                     <SyntaxHighlighter
                       language="json"
-                      style={vscDarkPlus}
+                      style={highlightStyle}
                       customStyle={{
                         margin: 0,
                         fontSize: "13px",

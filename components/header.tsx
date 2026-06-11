@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { Button } from "@/components/ui/button";
+import { HeaderActions } from "@/components/header-actions";
 import { ArrowLeft, Home, History, Upload, Zap } from "lucide-react";
 
 type HeaderProps = {
@@ -32,7 +33,7 @@ export function Header({
 
   return (
     <header className="sticky top-0 z-20 bg-card border-b border-border shadow-sm">
-      <div className="h-1 bg-primary w-full" />
+      <div className="h-1 bg-background w-full" />
       <div className="container mx-auto max-w-screen-2xl flex flex-col md:flex-row items-center justify-between py-4 px-6 gap-4">
         <div className="flex items-center gap-4 w-full md:w-auto">
           {showBackButton && (
@@ -104,6 +105,7 @@ export function Header({
               </Button>
             </>
           )}
+          <HeaderActions />
         </nav>
       </div>
     </header>

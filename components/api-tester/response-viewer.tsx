@@ -1,6 +1,6 @@
 "use client";
 import { Prism as SyntaxHighlighter } from "react-syntax-highlighter";
-import { oneLight } from "react-syntax-highlighter/dist/esm/styles/prism";
+import { useSyntaxHighlightStyle } from "@/hooks/use-syntax-highlight-style";
 import { useState, useEffect } from "react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
@@ -43,6 +43,7 @@ export function ResponseViewer({
   getStatusBadgeColor,
   copyToClipboard,
 }: ResponseViewerProps) {
+  const highlightStyle = useSyntaxHighlightStyle();
   const [expanded, setExpanded] = useState(true);
   const [copied, setCopied] = useState<string | null>(null);
   const [isJsonView, setIsJsonView] = useState<boolean>(true);
@@ -338,7 +339,7 @@ export function ResponseViewer({
                     {isJsonView ? (
                       <SyntaxHighlighter
                         language="json"
-                        style={oneLight}
+                        style={highlightStyle}
                         customStyle={{
                           background: "transparent",
                           fontSize: "0.95em",

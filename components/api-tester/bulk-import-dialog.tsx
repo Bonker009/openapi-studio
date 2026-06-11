@@ -1,6 +1,8 @@
+"use client";
+
 import React, { useState } from "react";
 import { Prism as SyntaxHighlighter } from "react-syntax-highlighter";
-import { oneLight } from "react-syntax-highlighter/dist/esm/styles/prism";
+import { useSyntaxHighlightStyle } from "@/hooks/use-syntax-highlight-style";
 import {
   Dialog,
   DialogContent,
@@ -31,6 +33,7 @@ export function BulkImportDialog({
   handleBulkImport,
   requestBody,
 }: ExtendedBulkImportDialogProps) {
+  const highlightStyle = useSyntaxHighlightStyle();
   const [isGenerating, setIsGenerating] = useState(false);
 
   const sample = (() => {
@@ -207,7 +210,7 @@ export function BulkImportDialog({
                 <div className="bg-muted/40 rounded-md">
                   <SyntaxHighlighter
                     language="json"
-                    style={oneLight}
+                    style={highlightStyle}
                     customStyle={{
                       margin: 0,
                       borderRadius: "0.375rem",

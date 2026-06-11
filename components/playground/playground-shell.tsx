@@ -19,6 +19,7 @@ import {
 } from "@/lib/playground/credentials";
 import { cn } from "@/lib/utils";
 import { AiFloatingButton } from "@/components/ai/ai-floating-button";
+import { SaveCredentialOnSelection } from "@/components/playground/save-credential-on-selection";
 
 type PlaygroundShellProps = {
   specId: string;
@@ -306,6 +307,11 @@ export function PlaygroundShell({
           />
         </div>
       </main>
+
+      <SaveCredentialOnSelection
+        specId={specId}
+        onActiveChange={setActiveCredential}
+      />
 
       <AiFloatingButton specId={specId} defaultBaseUrl={baseUrl} />
     </>

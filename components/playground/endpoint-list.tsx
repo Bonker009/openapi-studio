@@ -338,7 +338,10 @@ export function EndpointList({
         </div>
       </div>
 
-      <div ref={scrollRef} className="min-h-0 flex-1 overflow-y-auto">
+      <div
+        ref={scrollRef}
+        className="min-h-0 flex-1 overflow-y-auto"
+      >
         <h2 className="sr-only">Endpoints</h2>
 
         {!isCompact && filtered.length > 0 && (
@@ -397,33 +400,37 @@ export function EndpointList({
                   if (isCompact) {
                     return (
                       <li key={key}>
-                        <button
-                          type="button"
-                          onClick={() => onSelect(ep)}
-                          aria-current={isSelected ? "true" : undefined}
-                          aria-label={`${ep.method} ${ep.path}${authLabel}`}
+                        <div
                           className={cn(
-                            "w-full border-l-2 border-transparent px-4 py-2.5 text-left transition-colors",
+                            "w-full border-l-2 border-transparent px-4 py-2.5 transition-colors",
                             isSelected
                               ? "border-l-primary bg-primary/10"
                               : "hover:bg-muted/40"
                           )}
                         >
                           <div className="flex min-w-0 items-start gap-2">
-                            <MethodBadge
-                              method={ep.method}
-                              className="mt-0.5 shrink-0 justify-center px-1.5 py-0 text-[10px] min-w-13"
-                            />
-                            <div className="min-w-0 flex-1 flex flex-col gap-0.5">
-                              <span className="break-all font-mono text-sm leading-snug text-foreground">
-                                {ep.path}
-                              </span>
-                              {(ep.summary || ep.description) && (
-                                <span className="text-xs leading-snug text-muted-foreground">
-                                  {ep.summary ?? ep.description}
+                            <button
+                              type="button"
+                              onClick={() => onSelect(ep)}
+                              aria-current={isSelected ? "true" : undefined}
+                              aria-label={`${ep.method} ${ep.path}${authLabel}`}
+                              className="flex min-w-0 flex-1 items-start gap-2 text-left outline-none focus-visible:ring-2 focus-visible:ring-ring rounded-sm"
+                            >
+                              <MethodBadge
+                                method={ep.method}
+                                className="mt-0.5 shrink-0 justify-center px-1.5 py-0 text-[10px] min-w-13"
+                              />
+                              <div className="min-w-0 flex-1 flex flex-col gap-0.5">
+                                <span className="break-all font-mono text-sm leading-snug text-foreground">
+                                  {ep.path}
                                 </span>
-                              )}
-                            </div>
+                                {(ep.summary || ep.description) && (
+                                  <span className="text-xs leading-snug text-muted-foreground">
+                                    {ep.summary ?? ep.description}
+                                  </span>
+                                )}
+                              </div>
+                            </button>
                             <EndpointAuthRoleControl
                               specId={specId}
                               endpoint={ep}
@@ -434,40 +441,47 @@ export function EndpointList({
                               authSatisfied={authSatisfied}
                             />
                           </div>
-                        </button>
+                        </div>
                       </li>
                     );
                   }
 
                   return (
                     <li key={key}>
-                      <button
-                        type="button"
-                        onClick={() => onSelect(ep)}
-                        aria-current={isSelected ? "true" : undefined}
-                        aria-label={`${ep.method} ${ep.path}${authLabel}`}
+                      <div
                         className={cn(
-                          "grid w-full items-start gap-x-2 border-l-2 border-transparent px-4 py-2 text-left transition-colors",
+                          "grid w-full items-start gap-x-2 border-l-2 border-transparent px-4 py-2 transition-colors",
                           isSelected
                             ? "border-l-primary bg-primary/10"
                             : "hover:bg-muted/40"
                         )}
                         style={{ gridTemplateColumns: gridColumns }}
                       >
-                        <MethodBadge
-                          method={ep.method}
-                          className="mt-0.5 shrink-0 justify-center px-1.5 py-0 text-[10px] min-w-0"
-                        />
-                        <div className="min-w-0 flex flex-col gap-0.5 py-0.5">
-                          <span className="break-all font-mono text-sm leading-snug text-foreground">
-                            {ep.path}
-                          </span>
-                          {(ep.summary || ep.description) && (
-                            <span className="line-clamp-2 text-xs leading-snug text-muted-foreground">
-                              {ep.summary ?? ep.description}
+                        <button
+                          type="button"
+                          onClick={() => onSelect(ep)}
+                          aria-current={isSelected ? "true" : undefined}
+                          aria-label={`${ep.method} ${ep.path}${authLabel}`}
+                          className="col-span-2 grid min-w-0 items-start gap-x-2 text-left outline-none focus-visible:ring-2 focus-visible:ring-ring rounded-sm"
+                          style={{
+                            gridTemplateColumns: `${methodWidth}px minmax(140px, 1fr)`,
+                          }}
+                        >
+                          <MethodBadge
+                            method={ep.method}
+                            className="mt-0.5 shrink-0 justify-center px-1.5 py-0 text-[10px] min-w-0"
+                          />
+                          <div className="min-w-0 flex flex-col gap-0.5 py-0.5">
+                            <span className="break-all font-mono text-sm leading-snug text-foreground">
+                              {ep.path}
                             </span>
-                          )}
-                        </div>
+                            {(ep.summary || ep.description) && (
+                              <span className="line-clamp-2 text-xs leading-snug text-muted-foreground">
+                                {ep.summary ?? ep.description}
+                              </span>
+                            )}
+                          </div>
+                        </button>
                         <div className="flex items-start justify-center pt-0.5">
                           <EndpointAuthRoleControl
                             specId={specId}
@@ -479,7 +493,7 @@ export function EndpointList({
                             authSatisfied={authSatisfied}
                           />
                         </div>
-                      </button>
+                      </div>
                     </li>
                   );
                 })}

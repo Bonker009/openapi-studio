@@ -1,3 +1,5 @@
+"use client";
+
 import React from "react";
 import {
   Card,
@@ -18,7 +20,7 @@ import {
 import { cn } from "@/lib/utils";
 import { TestReportProps } from "@/app/types/types";
 import { Prism as SyntaxHighlighter } from "react-syntax-highlighter";
-import { oneLight } from "react-syntax-highlighter/dist/esm/styles/prism";
+import { useSyntaxHighlightStyle } from "@/hooks/use-syntax-highlight-style";
 
 export function TestReport({
   testResults,
@@ -28,6 +30,7 @@ export function TestReport({
   getStatusBadgeColor,
   copyToClipboard,
 }: TestReportProps) {
+  const highlightStyle = useSyntaxHighlightStyle();
   // Summary counts
   const passed = testResults.filter(
     (r) => r.response && r.response.status >= 200 && r.response.status < 300
@@ -151,7 +154,7 @@ export function TestReport({
                     0 ? (
                       <SyntaxHighlighter
                         language="json"
-                        style={oneLight}
+                        style={highlightStyle}
                         customStyle={{
                           background: "transparent",
 
@@ -176,7 +179,7 @@ export function TestReport({
                     {activeTestResult.request.body ? (
                       <SyntaxHighlighter
                         language="json"
-                        style={oneLight}
+                        style={highlightStyle}
                         customStyle={{
                           background: "transparent",
 
@@ -234,7 +237,7 @@ export function TestReport({
                         0 ? (
                           <SyntaxHighlighter
                             language="json"
-                            style={oneLight}
+                            style={highlightStyle}
                             customStyle={{
                               background: "transparent",
 
@@ -279,7 +282,7 @@ export function TestReport({
                         {activeTestResult.response.body ? (
                           <SyntaxHighlighter
                             language="json"
-                            style={oneLight}
+                            style={highlightStyle}
                             customStyle={{
                               background: "transparent",
 
@@ -425,7 +428,7 @@ export function TestReport({
                         <div className="bg-muted p-2 rounded text-xs max-h-32 overflow-y-auto">
                           <SyntaxHighlighter
                             language="json"
-                            style={oneLight}
+                            style={highlightStyle}
                             customStyle={{
                               background: "transparent",
                               fontSize: "0.85em",
@@ -450,7 +453,7 @@ export function TestReport({
                         <div className="bg-muted p-2 rounded text-xs max-h-32 overflow-y-auto">
                           <SyntaxHighlighter
                             language="json"
-                            style={oneLight}
+                            style={highlightStyle}
                             customStyle={{
                               background: "transparent",
                               fontSize: "0.85em",

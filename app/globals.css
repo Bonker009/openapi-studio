@@ -192,6 +192,28 @@
   }
 }
 
+/* CodeMirror JSON editor — @uiw default light theme overrides custom bg in extensions */
+.dark .json-body-editor .cm-editor,
+.dark .json-body-editor .cm-scroller {
+  background-color: var(--card) !important;
+  color: var(--card-foreground);
+}
+
+.json-body-editor .cm-editor .cm-selectionBackground,
+.json-body-editor .cm-editor.cm-focused > .cm-scroller > .cm-selectionLayer .cm-selectionBackground {
+  background-color: #2563eb !important;
+}
+
+.json-body-editor .cm-content ::selection {
+  background-color: #2563eb !important;
+  color: #ffffff !important;
+}
+
+textarea[data-slot="textarea"]::selection {
+  background-color: #2563eb;
+  color: #ffffff;
+}
+
 /* React Flow diagram — flowing edge animation */
 .flow-diagram .react-flow__edge-path {
   stroke-width: 2;
@@ -330,4 +352,42 @@
     transition-duration: 0.01ms !important;
     scroll-behavior: auto !important;
   }
+}
+
+/* Thin scrollbars (Firefox + WebKit) */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(100, 116, 139, 0.6) transparent;
+}
+
+*::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+*::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+*::-webkit-scrollbar-thumb {
+  background-color: rgba(100, 116, 139, 0.45);
+  border-radius: 9999px;
+  border: 2px solid transparent;
+  background-clip: content-box;
+}
+
+*::-webkit-scrollbar-thumb:hover {
+  background-color: rgba(100, 116, 139, 0.65);
+}
+
+.dark * {
+  scrollbar-color: rgba(148, 163, 184, 0.45) transparent;
+}
+
+.dark *::-webkit-scrollbar-thumb {
+  background-color: rgba(148, 163, 184, 0.32);
+}
+
+.dark *::-webkit-scrollbar-thumb:hover {
+  background-color: rgba(148, 163, 184, 0.5);
 }

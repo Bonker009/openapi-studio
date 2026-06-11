@@ -7,7 +7,9 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import type { PlaygroundEndpoint } from "@/lib/playground/endpoints";
+import { editorTextareaClassName } from "@/lib/playground/codemirror-theme";
 import type { OverrideMap } from "@/lib/validation/types";
+import { cn } from "@/lib/utils";
 type Row = { key: string; value: string };
 
 function mapToRows(map: OverrideMap): Row[] {
@@ -200,7 +202,7 @@ export function ValidationOverridesEditor({
           </Label>
           <textarea
             id={`validation-overrides-json-${title}`}
-            className="w-full min-h-[120px] rounded-md border bg-background px-3 py-2 text-xs font-mono"
+            className={cn(editorTextareaClassName, "min-h-[120px]")}
             value={jsonText}
             disabled={disabled}
             onChange={(e) => setJsonText(e.target.value)}

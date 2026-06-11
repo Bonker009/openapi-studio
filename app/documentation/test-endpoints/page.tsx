@@ -1,7 +1,13 @@
 "use client";
 
 import { useState } from "react";
-import { Card, CardHeader, CardTitle, CardContent, CardDescription } from "@/components/ui/card";
+import {
+  Card,
+  CardHeader,
+  CardTitle,
+  CardContent,
+  CardDescription,
+} from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -32,10 +38,7 @@ export default function ApiAutoTestPage() {
     const res: any[] = [];
     for (let i = 0; i < testCases.length; i++) {
       const tc = testCases[i];
-      const result = await runTestCase(
-        tc,
-        apiUrl
-      );
+      const result = await runTestCase(tc, apiUrl);
       res.push(result);
     }
     setResults(res);
@@ -55,7 +58,8 @@ export default function ApiAutoTestPage() {
           <CardHeader>
             <CardTitle>API Auto Tester</CardTitle>
             <CardDescription>
-              Enter your API endpoint, token, and test cases to run automated tests.
+              Enter your API endpoint, token, and test cases to run automated
+              tests.
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
@@ -63,32 +67,36 @@ export default function ApiAutoTestPage() {
               <label className="block mb-1 font-medium">API URL</label>
               <Input
                 value={apiUrl}
-                onChange={e => setApiUrl(e.target.value)}
+                onChange={(e) => setApiUrl(e.target.value)}
                 placeholder="https://api.example.com/endpoint"
               />
             </div>
             <div>
-              <label className="block mb-1 font-medium">Bearer Token (optional)</label>
+              <label className="block mb-1 font-medium">
+                Bearer Token (optional)
+              </label>
               <Input
                 value={token}
-                onChange={e => setToken(e.target.value)}
+                onChange={(e) => setToken(e.target.value)}
                 placeholder="Paste your token here"
               />
             </div>
             <div>
-              <label className="block mb-1 font-medium">Test Cases (JSON array)</label>
+              <label className="block mb-1 font-medium">
+                Test Cases (JSON array)
+              </label>
               <Textarea
                 rows={6}
                 value={testCasesJson}
-                onChange={e => setTestCasesJson(e.target.value)}
+                onChange={(e) => setTestCasesJson(e.target.value)}
                 placeholder={`[
-  {
-    "name": "Valid request",
-    "description": "Should return 200",
-    "body": { "foo": "bar" },
-    "expectedStatus": 200
-  }
-]`}
+                {
+                  "name": "Valid request",
+                  "description": "Should return 200",
+                  "body": { "foo": "bar" },
+                  "expectedStatus": 200
+                }
+              ]`}
               />
               <Button size="sm" className="mt-2" onClick={handleParseTestCases}>
                 Parse Test Cases
@@ -107,8 +115,12 @@ export default function ApiAutoTestPage() {
                 {results.map((res, idx) => (
                   <div key={idx} className="border rounded p-3 bg-gray-50">
                     <div className="flex items-center gap-2 mb-2">
-                      <Badge>{testCases[idx]?.name || `Test #${idx + 1}`}</Badge>
-                      <span className={res.ok ? "text-success" : "text-destructive"}>
+                      <Badge>
+                        {testCases[idx]?.name || `Test #${idx + 1}`}
+                      </Badge>
+                      <span
+                        className={res.ok ? "text-success" : "text-destructive"}
+                      >
                         {res.status}
                       </span>
                     </div>

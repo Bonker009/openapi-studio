@@ -2,9 +2,18 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { ArrowLeft, FileText, History, Upload, FlaskConical, ShieldCheck, Workflow } from "lucide-react";
+import {
+  ArrowLeft,
+  FileText,
+  History,
+  Upload,
+  FlaskConical,
+  ShieldCheck,
+  Workflow,
+} from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { HeaderActions } from "@/components/header-actions";
 import { EnvironmentSwitcher } from "@/components/playground/environment-switcher";
 import { TokenPanel } from "@/components/playground/token-panel";
 import { SmokeTestDialog } from "@/components/playground/smoke-test-dialog";
@@ -54,9 +63,14 @@ export function PlaygroundHeader({
 
   return (
     <header className="shrink-0 z-20 bg-card border-b border-border">
-      <div className="h-1 bg-primary w-full" />
+      <div className="h-1 bg-background w-full" />
       <div className="flex flex-wrap items-center gap-x-3 gap-y-2 px-4 py-3">
-        <Button variant="ghost" size="icon" className="shrink-0 h-9 w-9" asChild>
+        <Button
+          variant="ghost"
+          size="icon"
+          className="shrink-0 h-9 w-9"
+          asChild
+        >
           <Link href={`/documentation/${specId}`}>
             <ArrowLeft className="h-5 w-5" />
             <span className="sr-only">Back to documentation</span>
@@ -72,7 +86,10 @@ export function PlaygroundHeader({
               {specTitle}
             </h1>
             {versionLabel && (
-              <Badge variant="info" className="tabular-nums text-[10px] shrink-0">
+              <Badge
+                variant="info"
+                className="tabular-nums text-[10px] shrink-0"
+              >
                 {versionLabel}
               </Badge>
             )}
@@ -87,7 +104,10 @@ export function PlaygroundHeader({
             onActiveUrlChange={onBaseUrlChange}
             variant="navbar"
           />
-          <div className="hidden sm:block h-6 w-px bg-border shrink-0" aria-hidden />
+          <div
+            className="hidden sm:block h-6 w-px bg-border shrink-0"
+            aria-hidden
+          />
           <TokenPanel
             specId={specId}
             activeCredential={activeCredential}
@@ -176,6 +196,7 @@ export function PlaygroundHeader({
               Docs
             </Link>
           </Button>
+          <HeaderActions />
         </div>
       </div>
     </header>

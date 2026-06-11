@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useDarkMode } from "@/hooks/use-dark-mode";
 import {
   jsonTreeThemeDark,
   jsonTreeThemeLight,
@@ -8,16 +8,6 @@ import {
 } from "@/lib/playground/json-tree-theme";
 
 export function useJsonTreeTheme(): JsonTreeTheme {
-  const [dark, setDark] = useState(false);
-
-  useEffect(() => {
-    const root = document.documentElement;
-    const read = () => setDark(root.classList.contains("dark"));
-    read();
-    const obs = new MutationObserver(read);
-    obs.observe(root, { attributes: true, attributeFilter: ["class"] });
-    return () => obs.disconnect();
-  }, []);
-
+  const dark = useDarkMode();
   return dark ? jsonTreeThemeDark : jsonTreeThemeLight;
 }

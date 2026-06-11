@@ -27,7 +27,7 @@ import {
 import { Header } from "@/components/header";
 import { Skeleton } from "@/components/ui/skeleton";
 import { fetchData, saveData } from "@/lib/data-service";
-import { getControllerBadgeStyle } from "@/lib/controller-colors";
+import { useControllerColors } from "@/hooks/use-controller-colors";
 import { toast } from "sonner";
 import { SmokeTestDialog } from "@/components/playground/smoke-test-dialog";
 import { extractPlaygroundEndpoints } from "@/lib/playground/endpoints";
@@ -55,6 +55,7 @@ type EndpointData = {
 export default function Documentation() {
   const params = useParams();
   const id = params?.id as string;
+  const { getControllerBadgeStyle } = useControllerColors();
 
   const [apiData, setApiData] = useState<any>(null);
 

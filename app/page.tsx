@@ -42,7 +42,7 @@ export default function Home() {
 
   const filtered = useMemo(
     () => filterAndSortSpecs(specs, search, sort),
-    [specs, search, sort]
+    [specs, search, sort],
   );
 
   const specContent = (

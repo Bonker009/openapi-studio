@@ -7,40 +7,13 @@ import { bracketMatching, indentOnInput } from "@codemirror/language";
 import { closeBrackets, closeBracketsKeymap } from "@codemirror/autocomplete";
 import { indentWithTab } from "@codemirror/commands";
 import { EditorView, keymap } from "@codemirror/view";
+import { useDarkMode } from "@/hooks/use-dark-mode";
+import {
+  getCodeMirrorTheme,
+  getJsonSyntaxHighlighting,
+  editorSurfaceClassName,
+} from "@/lib/playground/codemirror-theme";
 import { cn } from "@/lib/utils";
-
-const editorTheme = EditorView.theme({
-  "&": {
-    backgroundColor: "#ffffff",
-    fontSize: "12px",
-  },
-  "&.cm-focused": {
-    outline: "none",
-  },
-  ".cm-content": {
-    fontFamily:
-      'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace',
-    padding: "12px 0",
-    caretColor: "#0f172a",
-  },
-  ".cm-gutters": {
-    backgroundColor: "#fafafa",
-    color: "#94a3b8",
-    borderRight: "1px solid #e2e8f0",
-  },
-  ".cm-activeLineGutter": {
-    backgroundColor: "#f1f5f9",
-  },
-  ".cm-activeLine": {
-    backgroundColor: "#f8fafc",
-  },
-  ".cm-selectionBackground, &.cm-focused .cm-selectionBackground": {
-    backgroundColor: "#dbeafe !important",
-  },
-  ".cm-cursor": {
-    borderLeftColor: "#0f172a",
-  },
-});
 
 type JsonBodyEditorProps = {
   value: string;
@@ -57,29 +30,30 @@ export function JsonBodyEditor({
   minHeight = "200px",
   placeholder = "{\n  \n}",
 }: JsonBodyEditorProps) {
+  const dark = useDarkMode();
+
+  const theme = useMemo(() => getCodeMirrorTheme(dark), [dark]);
+
   const extensions = useMemo(
     () => [
-      editorTheme,
       json(),
+      getJsonSyntaxHighlighting(dark),
       bracketMatching(),
       closeBrackets(),
       indentOnInput(),
       EditorView.lineWrapping,
       keymap.of([...closeBracketsKeymap, indentWithTab]),
     ],
-    []
+    [dark]
   );
 
   return (
-    <div
-      className={cn(
-        "rounded-md border border-input overflow-hidden bg-card",
-        className
-      )}
-    >
+    <div className={cn(editorSurfaceClassName, "json-body-editor", className)}>
       <CodeMirror
+        key={dark ? "dark" : "light"}
         value={value}
         height={minHeight}
+        theme={theme}
         extensions={extensions}
         onChange={onChange}
         placeholder={placeholder}
